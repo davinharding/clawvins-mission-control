@@ -1,46 +1,51 @@
-const { verifyToken } = require('./auth');
+import { Server } from 'socket.io';
+import { verifyToken } from './auth.js';
 
-function setupSocket(io) {
+export function setupWebSocket(server, app) {
+  const io = new Server(server, {
+    cors: {
+      origin: process.env.FRONTEND_URL || 'http://localhost:9000',
+      credentials: true,
+    },
+  });
+
+  // Authentication middleware for Socket.io
+  io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
+    
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return next(new Error('Invalid or expired token'));
+    }
+    
+    socket.user = decoded;
+    next();
+  });
+
   io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
+    console.log(`Client connected: ${socket.user.name} (${socket.user.id})`);
     
-    let authenticated = false;
-    
-    // Authenticate socket connection
-    socket.on('authenticate', (data) => {
-      const { token } = data;
-      const user = verifyToken(token);
-      
-      if (user) {
-        authenticated = true;
-        socket.user = user;
-        socket.emit('authenticated', { user });
-        console.log('Socket authenticated:', user.name);
-      } else {
-        socket.emit('auth_error', { error: 'Invalid token' });
-        socket.disconnect();
-      }
-    });
-    
-    // Require authentication for other events
-    socket.use((packet, next) => {
-      if (packet[0] === 'authenticate') {
-        return next();
-      }
-      
-      if (!authenticated) {
-        return next(new Error('Not authenticated'));
-      }
-      
-      next();
-    });
+    // Send authenticated event
+    socket.emit('authenticated', { user: socket.user });
     
     socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+      console.log(`Client disconnected: ${socket.user.name}`);
+    });
+    
+    // Handle errors
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
     });
   });
+
+  // Attach io to app so routes can access it
+  app.io = io;
+  
+  console.log('WebSocket server initialized');
   
   return io;
 }
-
-module.exports = { setupSocket };

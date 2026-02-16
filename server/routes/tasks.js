@@ -1,37 +1,41 @@
 import express from 'express';
-import { getAllTasks, getTaskById, createTask, updateTask, deleteTask, createEvent } from '../db.js';
+import {
+  getAllTasks,
+  getTaskById,
+  createTask,
+  updateTask,
+  deleteTask,
+  createEvent,
+} from '../db.js';
+import { schemas, validateBody, validateQuery } from '../validation.js';
 
 const router = express.Router();
 
-// GET /api/tasks
-router.get('/', (req, res) => {
+const formatTask = (task) => ({
+  id: task.id,
+  title: task.title,
+  description: task.description,
+  status: task.status,
+  assignedAgent: task.assigned_agent,
+  priority: task.priority,
+  createdAt: task.created_at,
+  updatedAt: task.updated_at,
+  createdBy: task.created_by,
+  tags: JSON.parse(task.tags || '[]'),
+});
+
+router.get('/', validateQuery(schemas.taskQuery), (req, res) => {
   try {
     const { status, agent } = req.query;
     const tasks = getAllTasks({ status, agent });
-    
-    // Transform to camelCase for frontend
-    const formatted = tasks.map(t => ({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      status: t.status,
-      assignedAgent: t.assigned_agent,
-      priority: t.priority,
-      createdAt: t.created_at,
-      updatedAt: t.updated_at,
-      createdBy: t.created_by,
-      tags: JSON.parse(t.tags || '[]'),
-    }));
-    
-    res.json({ tasks: formatted });
+    res.json({ tasks: tasks.map(formatTask) });
   } catch (err) {
     console.error('Error fetching tasks:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST /api/tasks
-router.post('/', (req, res) => {
+router.post('/', validateBody(schemas.taskCreate), (req, res) => {
   try {
     const task = createTask({
       title: req.body.title,
@@ -42,55 +46,36 @@ router.post('/', (req, res) => {
       tags: req.body.tags,
       createdBy: req.user.id,
     });
-    
-    // Create event
-    createEvent({
+
+    const event = createEvent({
       type: 'task_created',
       message: `${req.user.name} created task: ${task.title}`,
       agentId: req.user.id,
       taskId: task.id,
     });
-    
-    // Broadcast to WebSocket (handled by socket.js)
+
     if (req.app.io) {
-      req.app.io.emit('task.created', {
-        task: {
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          assignedAgent: task.assigned_agent,
-          priority: task.priority,
-          createdAt: task.created_at,
-          updatedAt: task.updated_at,
-          createdBy: task.created_by,
-          tags: JSON.parse(task.tags || '[]'),
+      req.app.io.emit('task.created', { task: formatTask(task) });
+      req.app.io.emit('event.new', {
+        event: {
+          id: event.id,
+          type: event.type,
+          message: event.message,
+          agentId: event.agentId,
+          taskId: event.taskId,
+          timestamp: event.timestamp,
         },
       });
     }
-    
-    res.status(201).json({
-      task: {
-        id: task.id,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        assignedAgent: task.assigned_agent,
-        priority: task.priority,
-        createdAt: task.created_at,
-        updatedAt: task.updated_at,
-        createdBy: task.created_by,
-        tags: JSON.parse(task.tags || '[]'),
-      },
-    });
+
+    res.status(201).json({ task: formatTask(task) });
   } catch (err) {
     console.error('Error creating task:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// PATCH /api/tasks/:id
-router.patch('/:id', (req, res) => {
+router.patch('/:id', validateBody(schemas.taskUpdate), (req, res) => {
   try {
     const task = updateTask(req.params.id, {
       title: req.body.title,
@@ -100,80 +85,69 @@ router.patch('/:id', (req, res) => {
       priority: req.body.priority,
       tags: req.body.tags,
     });
-    
+
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
-    
-    // Create event
-    createEvent({
+
+    const event = createEvent({
       type: 'task_updated',
       message: `${req.user.name} updated task: ${task.title}`,
       agentId: req.user.id,
       taskId: task.id,
     });
-    
-    // Broadcast to WebSocket
+
     if (req.app.io) {
-      req.app.io.emit('task.updated', {
-        task: {
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          assignedAgent: task.assigned_agent,
-          priority: task.priority,
-          createdAt: task.created_at,
-          updatedAt: task.updated_at,
-          createdBy: task.created_by,
-          tags: JSON.parse(task.tags || '[]'),
+      req.app.io.emit('task.updated', { task: formatTask(task) });
+      req.app.io.emit('event.new', {
+        event: {
+          id: event.id,
+          type: event.type,
+          message: event.message,
+          agentId: event.agentId,
+          taskId: event.taskId,
+          timestamp: event.timestamp,
         },
       });
     }
-    
-    res.json({
-      task: {
-        id: task.id,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        assignedAgent: task.assigned_agent,
-        priority: task.priority,
-        createdAt: task.created_at,
-        updatedAt: task.updated_at,
-        createdBy: task.created_by,
-        tags: JSON.parse(task.tags || '[]'),
-      },
-    });
+
+    res.json({ task: formatTask(task) });
   } catch (err) {
     console.error('Error updating task:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// DELETE /api/tasks/:id
 router.delete('/:id', (req, res) => {
   try {
     const task = getTaskById(req.params.id);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
-    
+
     const deleted = deleteTask(req.params.id);
-    
-    // Create event
-    createEvent({
+
+    const event = createEvent({
       type: 'task_deleted',
       message: `${req.user.name} deleted task: ${task.title}`,
       agentId: req.user.id,
       taskId: task.id,
     });
-    
-    // Broadcast to WebSocket
+
     if (req.app.io) {
       req.app.io.emit('task.deleted', { taskId: req.params.id });
+      req.app.io.emit('event.new', {
+        event: {
+          id: event.id,
+          type: event.type,
+          message: event.message,
+          agentId: event.agentId,
+          taskId: event.taskId,
+          timestamp: event.timestamp,
+        },
+      });
     }
-    
+
     res.json({ success: deleted });
   } catch (err) {
     console.error('Error deleting task:', err);

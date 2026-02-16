@@ -1,77 +1,67 @@
 import express from 'express';
-import { getAllAgents, getAgentById, updateAgent, createEvent } from '../db.js';
+import { getAllAgents, updateAgent, createEvent } from '../db.js';
+import { schemas, validateBody } from '../validation.js';
 
 const router = express.Router();
 
-// GET /api/agents
+const formatAgent = (agent) => ({
+  id: agent.id,
+  name: agent.name,
+  role: agent.role,
+  status: agent.status,
+  lastActive: agent.last_active,
+  avatarColor: agent.avatar_color,
+});
+
 router.get('/', (req, res) => {
   try {
     const agents = getAllAgents();
-    
-    // Transform to camelCase for frontend
-    const formatted = agents.map(a => ({
-      id: a.id,
-      name: a.name,
-      role: a.role,
-      status: a.status,
-      lastActive: a.last_active,
-      avatarColor: a.avatar_color,
-    }));
-    
-    res.json({ agents: formatted });
+    res.json({ agents: agents.map(formatAgent) });
   } catch (err) {
     console.error('Error fetching agents:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// PATCH /api/agents/:id
-router.patch('/:id', (req, res) => {
+router.patch('/:id', validateBody(schemas.agentUpdate), (req, res) => {
   try {
     const agent = updateAgent(req.params.id, {
-      status: req.body.status,
       name: req.body.name,
       role: req.body.role,
+      status: req.body.status,
       avatarColor: req.body.avatarColor,
     });
-    
+
     if (!agent) {
       return res.status(404).json({ error: 'Agent not found' });
     }
-    
-    // Create event if status changed
+
+    let event = null;
     if (req.body.status) {
-      createEvent({
+      event = createEvent({
         type: 'agent_status_changed',
         message: `${agent.name} is now ${req.body.status}`,
         agentId: agent.id,
       });
     }
-    
-    // Broadcast to WebSocket
+
     if (req.app.io) {
-      req.app.io.emit('agent.status_changed', {
-        agent: {
-          id: agent.id,
-          name: agent.name,
-          role: agent.role,
-          status: agent.status,
-          lastActive: agent.last_active,
-          avatarColor: agent.avatar_color,
-        },
-      });
+      req.app.io.emit('agent.status_changed', { agent: formatAgent(agent) });
+      if (event) {
+        req.app.io.emit('event.new', {
+          event: {
+            id: event.id,
+            type: event.type,
+            message: event.message,
+            agentId: event.agentId,
+            taskId: event.taskId,
+            timestamp: event.timestamp,
+          },
+        });
+      }
     }
-    
-    res.json({
-      agent: {
-        id: agent.id,
-        name: agent.name,
-        role: agent.role,
-        status: agent.status,
-        lastActive: agent.last_active,
-        avatarColor: agent.avatar_color,
-      },
-    });
+
+    res.json({ agent: formatAgent(agent) });
   } catch (err) {
     console.error('Error updating agent:', err);
     res.status(500).json({ error: 'Internal server error' });

@@ -1,0 +1,135 @@
+export type TaskStatus = 'backlog' | 'todo' | 'in-progress' | 'done';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
+export type AgentRole = 'Main' | 'Dev' | 'Research' | 'Ops';
+export type AgentStatus = 'online' | 'offline' | 'busy';
+
+export type Task = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: TaskStatus;
+  assignedAgent?: string | null;
+  priority?: TaskPriority | null;
+  createdAt: number;
+  updatedAt: number;
+  createdBy?: string | null;
+  tags: string[];
+};
+
+export type Agent = {
+  id: string;
+  name: string;
+  role: AgentRole;
+  status: AgentStatus;
+  lastActive: number;
+  avatarColor?: string | null;
+};
+
+export type EventItem = {
+  id: string;
+  type: string;
+  message: string;
+  agentId?: string | null;
+  taskId?: string | null;
+  timestamp: number;
+};
+
+export type LoginResponse = {
+  token: string;
+  user: { id: string; name: string; role: AgentRole };
+};
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const TOKEN_KEY = 'missionControlToken';
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
+export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, options);
+  if (!res.ok) {
+    const message = await res.text();
+    throw new Error(message || `Request failed with ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function login(username: string, password: string) {
+  return request<LoginResponse>('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+function authHeaders() {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function getTasks(params?: { status?: TaskStatus; agent?: string }) {
+  const search = new URLSearchParams();
+  if (params?.status) search.set('status', params.status);
+  if (params?.agent) search.set('agent', params.agent);
+  const query = search.toString();
+  return request<{ tasks: Task[] }>(`/tasks${query ? `?${query}` : ''}`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function createTask(task: Partial<Task>) {
+  return request<{ task: Task }>('/tasks', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(task),
+  });
+}
+
+export async function updateTask(id: string, updates: Partial<Task>) {
+  return request<{ task: Task }>(`/tasks/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function deleteTask(id: string) {
+  return request<{ success: boolean }>(`/tasks/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function getAgents() {
+  return request<{ agents: Agent[] }>('/agents', {
+    headers: authHeaders(),
+  });
+}
+
+export async function updateAgent(id: string, updates: Partial<Agent>) {
+  return request<{ agent: Agent }>(`/agents/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function getEvents(params?: { limit?: number; since?: number }) {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set('limit', String(params.limit));
+  if (params?.since) search.set('since', String(params.since));
+  const query = search.toString();
+  return request<{ events: EventItem[] }>(`/events${query ? `?${query}` : ''}`, {
+    headers: authHeaders(),
+  });
+}

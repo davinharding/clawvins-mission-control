@@ -62,7 +62,8 @@ const validateBody = (schema) => (req, res, next) => {
 
 const validateQuery = (schema) => (req, res, next) => {
   try {
-    req.query = schema.parse(req.query);
+    // In Express 5, req.query is read-only, so we just validate without reassigning
+    schema.parse(req.query);
     next();
   } catch (err) {
     const details = err.issues ?? err.errors ?? [];

@@ -1,42 +1,69 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import http from 'node:http';
-import { Server } from 'socket.io';
+import { createServer } from 'http';
 import { authMiddleware } from './auth.js';
-import tasksRoutes from './routes/tasks.js';
-import agentsRoutes from './routes/agents.js';
-import eventsRoutes from './routes/events.js';
+import { setupWebSocket } from './socket.js';
 import authRoutes from './routes/auth.js';
-import { setupSocket } from './socket.js';
-
-dotenv.config();
+import taskRoutes from './routes/tasks.js';
+import agentRoutes from './routes/agents.js';
+import eventRoutes from './routes/events.js';
 
 const app = express();
+const httpServer = createServer(app);
+const PORT = process.env.PORT || 3002;
 
-app.use(cors());
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:9000',
+  credentials: true,
+}));
 app.use(express.json());
 
+// Initialize WebSocket
+setupWebSocket(httpServer, app);
+
+// Health check endpoint (no auth required)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: Date.now() });
+});
+
+// Auth routes (no auth middleware)
 app.use('/api/auth', authRoutes);
-app.use('/api/tasks', authMiddleware, tasksRoutes);
-app.use('/api/agents', authMiddleware, agentsRoutes);
-app.use('/api/events', authMiddleware, eventsRoutes);
 
-const port = process.env.PORT || 3002;
-const server = http.createServer(app);
+// Protected API routes
+app.use('/api/tasks', authMiddleware, taskRoutes);
+app.use('/api/agents', authMiddleware, agentRoutes);
+app.use('/api/events', authMiddleware, eventRoutes);
 
-const io = new Server(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL || '*',
-    credentials: true,
-  },
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
-setupSocket(io);
-app.io = io;
-
-server.listen(port, () => {
-  console.log(`Mission Control API listening on port ${port}`);
+// Start server
+httpServer.listen(PORT, () => {
+  console.log(`Mission Control backend listening on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`WebSocket server ready`);
 });
 
-export default app;
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  httpServer.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  httpServer.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+export { app, httpServer };

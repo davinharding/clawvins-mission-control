@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 224 36% 12%;
+  --foreground: 210 40% 96%;
+  --card: 225 30% 16%;
+  --card-foreground: 210 40% 96%;
+  --muted: 223 20% 22%;
+  --muted-foreground: 215 20% 70%;
+  --primary: 188 78% 50%;
+  --primary-foreground: 220 20% 10%;
+  --accent: 255 60% 63%;
+  --accent-foreground: 0 0% 100%;
+  --border: 220 20% 24%;
+  color-scheme: dark;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 45%),
+    radial-gradient(circle at 20% 60%, rgba(129, 140, 248, 0.12), transparent 50%),
+    radial-gradient(circle at 80% 10%, rgba(244, 114, 182, 0.15), transparent 35%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  min-height: 100vh;
+  font-family: var(--font-display);
+}
+
+.bg-grid {
+  background-image: linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

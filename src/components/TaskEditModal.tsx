@@ -1,0 +1,285 @@
+import * as React from "react";
+import type { Agent, Comment, Task, TaskPriority, TaskStatus } from "@/lib/api";
+import { createComment, getComments } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { CommentsSection } from "@/components/CommentsSection";
+import { useToast } from "@/lib/toast";
+
+type TaskEditModalProps = {
+  open: boolean;
+  task: Task | null;
+  agents: Agent[];
+  incomingComment?: Comment | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (taskId: string, updates: Partial<Task>) => Promise<void>;
+  onDelete: (taskId: string) => Promise<void>;
+};
+
+const statusOptions: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
+const priorityOptions: TaskPriority[] = ["low", "medium", "high", "critical"];
+
+const upsertById = <T extends { id: string }>(items: T[], item: T) => {
+  const index = items.findIndex((existing) => existing.id === item.id);
+  if (index === -1) return [...items, item];
+  const next = [...items];
+  next[index] = item;
+  return next;
+};
+
+export function TaskEditModal({
+  open,
+  task,
+  agents,
+  incomingComment,
+  onOpenChange,
+  onSave,
+  onDelete,
+}: TaskEditModalProps) {
+  const { notify } = useToast();
+  const [title, setTitle] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [priority, setPriority] = React.useState<TaskPriority>("low");
+  const [assignedAgent, setAssignedAgent] = React.useState<string>("");
+  const [status, setStatus] = React.useState<TaskStatus>("backlog");
+  const [tagsInput, setTagsInput] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+  const [comments, setComments] = React.useState<Comment[]>([]);
+  const [loadingComments, setLoadingComments] = React.useState(false);
+  const [postingComment, setPostingComment] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!task) return;
+    setTitle(task.title);
+    setDescription(task.description ?? "");
+    setPriority((task.priority ?? "low") as TaskPriority);
+    setAssignedAgent(task.assignedAgent ?? "");
+    setStatus(task.status);
+    setTagsInput((task.tags ?? []).join(", "));
+  }, [task]);
+
+  React.useEffect(() => {
+    if (!open || !task) return;
+    let mounted = true;
+    setLoadingComments(true);
+    getComments(task.id)
+      .then((response) => {
+        if (!mounted) return;
+        setComments(response.comments);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        notify({
+          title: "Failed to load comments",
+          description: err instanceof Error ? err.message : "Unexpected error",
+          variant: "error",
+        });
+      })
+      .finally(() => {
+        if (mounted) setLoadingComments(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [open, task, notify]);
+
+  React.useEffect(() => {
+    if (!incomingComment || !task) return;
+    if (incomingComment.taskId !== task.id) return;
+    setComments((prev) => upsertById(prev, incomingComment));
+  }, [incomingComment, task]);
+
+  if (!task) return null;
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      notify({
+        title: "Title is required",
+        description: "Please provide a task title before saving.",
+        variant: "error",
+      });
+      return;
+    }
+
+    const tags = tagsInput
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    setSaving(true);
+    try {
+      await onSave(task.id, {
+        title: title.trim(),
+        description: description.trim() ? description.trim() : null,
+        priority,
+        assignedAgent: assignedAgent || null,
+        status,
+        tags,
+      });
+      onOpenChange(false);
+    } catch (err) {
+      notify({
+        title: "Failed to update task",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!task) return;
+    const confirmed = window.confirm(`Delete "${task.title}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await onDelete(task.id);
+      onOpenChange(false);
+    } catch (err) {
+      notify({
+        title: "Failed to delete task",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handlePostComment = async (text: string) => {
+    if (!task) return;
+    setPostingComment(true);
+    try {
+      const response = await createComment(task.id, text);
+      setComments((prev) => upsertById(prev, response.comment));
+    } catch (err) {
+      notify({
+        title: "Failed to post comment",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
+    } finally {
+      setPostingComment(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Task</DialogTitle>
+          <DialogDescription>Update task details and collaborate in real-time.</DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Title
+            </label>
+            <Input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={200}
+              placeholder="Task title"
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Description
+            </label>
+            <Textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              maxLength={2000}
+              placeholder="Describe the mission details..."
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Priority
+            </label>
+            <Select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
+              {priorityOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Status
+            </label>
+            <Select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>
+              {statusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Assigned Agent
+            </label>
+            <Select
+              value={assignedAgent}
+              onChange={(event) => setAssignedAgent(event.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Tags
+            </label>
+            <Input
+              value={tagsInput}
+              onChange={(event) => setTagsInput(event.target.value)}
+              placeholder="infra, urgent, api"
+            />
+            <p className="text-xs text-muted-foreground">Comma-separated tags</p>
+          </div>
+        </div>
+
+        <Separator className="my-6" />
+
+        <CommentsSection
+          comments={comments}
+          loading={loadingComments}
+          posting={postingComment}
+          onPost={handlePostComment}
+        />
+
+        <DialogFooter className="mt-6">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
+            Cancel
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleDelete}
+            disabled={saving || deleting}
+          >
+            {deleting ? "Deleting..." : "Delete"}
+          </Button>
+          <Button onClick={handleSave} disabled={saving || deleting}>
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

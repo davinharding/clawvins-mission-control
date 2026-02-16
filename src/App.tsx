@@ -22,9 +22,13 @@ import {
   getToken,
   login,
   setToken,
-  updateTask
+  updateTask,
+  deleteTask,
+  Comment
 } from "@/lib/api";
 import { createSocket } from "@/lib/socket";
+import { TaskEditModal } from "@/components/TaskEditModal";
+import { useToast } from "@/lib/toast";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -35,6 +39,8 @@ type TaskPayload = { task: Task };
 type TaskDeletedPayload = { taskId: string };
 
 type AgentPayload = { agent: Agent };
+
+type CommentPayload = { comment: Comment };
 
 const roles: Array<{ label: string; value: AgentRole | "All" }> = [
   { label: "All", value: "All" },
@@ -101,12 +107,21 @@ export default function HomePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [token, setTokenState] = React.useState<string | null>(getToken());
+  const [activeTaskId, setActiveTaskId] = React.useState<string | null>(null);
+  const [modalOpen, setModalOpen] = React.useState(false);
+  const [incomingComment, setIncomingComment] = React.useState<Comment | null>(null);
   const eventRef = React.useRef<HTMLDivElement>(null);
+  const activeTaskIdRef = React.useRef<string | null>(null);
+  const { notify } = useToast();
 
   React.useEffect(() => {
     if (!eventRef.current) return;
     eventRef.current.scrollTop = eventRef.current.scrollHeight;
   }, [events]);
+
+  React.useEffect(() => {
+    activeTaskIdRef.current = activeTaskId;
+  }, [activeTaskId]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -173,6 +188,9 @@ export default function HomePage() {
 
     socket.on("task.deleted", (payload: TaskDeletedPayload) => {
       setTasks((prev) => prev.filter((task) => task.id !== payload.taskId));
+      const currentTaskId = activeTaskIdRef.current;
+      setActiveTaskId((prev) => (prev === payload.taskId ? null : prev));
+      setModalOpen((prev) => (currentTaskId === payload.taskId ? false : prev));
     });
 
     socket.on("agent.status_changed", (payload: AgentPayload) => {
@@ -181,6 +199,10 @@ export default function HomePage() {
 
     socket.on("event.new", (payload: EventPayload) => {
       setEvents((prev) => addEvent(prev, payload.event));
+    });
+
+    socket.on("comment.created", (payload: CommentPayload) => {
+      setIncomingComment(payload.comment);
     });
 
     socket.on("auth_error", (payload: { error?: string }) => {
@@ -249,6 +271,11 @@ export default function HomePage() {
       await updateTask(taskId, { status });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update task");
+      notify({
+        title: "Failed to update task",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
       setTasks((prev) =>
         prev.map((task) =>
           task.id === taskId ? { ...task, status: existing.status } : task
@@ -272,7 +299,26 @@ export default function HomePage() {
       setTasks((prev) => upsertById(prev, response.task, true));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create task");
+      notify({
+        title: "Failed to create task",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
     }
+  };
+
+  const handleSaveTask = async (taskId: string, updates: Partial<Task>) => {
+    const response = await updateTask(taskId, updates);
+    setTasks((prev) => upsertById(prev, response.task));
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    const response = await deleteTask(taskId);
+    if (!response.success) {
+      throw new Error("Task could not be deleted");
+    }
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+    setActiveTaskId(null);
   };
 
   const agentById = React.useMemo(() => {
@@ -281,6 +327,11 @@ export default function HomePage() {
       return acc;
     }, {});
   }, [agents]);
+
+  const activeTask = React.useMemo(
+    () => tasks.find((task) => task.id === activeTaskId) ?? null,
+    [tasks, activeTaskId]
+  );
 
   return (
     <div className="min-h-screen">
@@ -447,6 +498,19 @@ export default function HomePage() {
                           key={task.id}
                           draggable
                           onDragStart={(event) => handleDragStart(event, task.id)}
+                          onClick={() => {
+                            setActiveTaskId(task.id);
+                            setModalOpen(true);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setActiveTaskId(task.id);
+                              setModalOpen(true);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
                           className="cursor-grab active:cursor-grabbing"
                         >
                           <CardHeader className="space-y-3">
@@ -530,6 +594,19 @@ export default function HomePage() {
           </Card>
         </aside>
       </main>
+
+      <TaskEditModal
+        open={modalOpen && !!activeTask}
+        task={activeTask}
+        agents={agents}
+        incomingComment={incomingComment}
+        onOpenChange={(nextOpen) => {
+          setModalOpen(nextOpen);
+          if (!nextOpen) setActiveTaskId(null);
+        }}
+        onSave={handleSaveTask}
+        onDelete={handleDeleteTask}
+      />
     </div>
   );
 }

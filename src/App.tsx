@@ -7,12 +7,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import {
+import type {
   Agent,
   AgentRole,
   EventItem,
   Task,
   TaskStatus,
+} from "@/lib/api";
+import {
   createTask,
   getAgents,
   getEvents,
@@ -326,7 +328,7 @@ export default function HomePage() {
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
                 Agent Filters
               </p>
-              <Tabs value={selectedRole} onValueChange={setSelectedRole} options={roles} />
+              <Tabs value={selectedRole} onValueChange={(v) => setSelectedRole(v as AgentRole | "All")} options={roles} />
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between text-xs font-semibold uppercase text-muted-foreground">

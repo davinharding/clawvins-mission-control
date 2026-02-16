@@ -34,6 +34,15 @@ export type EventItem = {
   timestamp: number;
 };
 
+export type Comment = {
+  id: string;
+  taskId: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: number;
+};
+
 export type LoginResponse = {
   token: string;
   user: { id: string; name: string; role: AgentRole };
@@ -131,5 +140,22 @@ export async function getEvents(params?: { limit?: number; since?: number }) {
   const query = search.toString();
   return request<{ events: EventItem[] }>(`/events${query ? `?${query}` : ''}`, {
     headers: authHeaders(),
+  });
+}
+
+export async function getComments(taskId: string) {
+  return request<{ comments: Comment[] }>(`/tasks/${taskId}/comments`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function createComment(taskId: string, text: string) {
+  return request<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ text }),
   });
 }

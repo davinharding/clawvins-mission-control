@@ -12,6 +12,7 @@ const db = new Database(dbPath);
 
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 // Initialize schema
 function initDB() {
@@ -52,6 +53,19 @@ function initDB() {
       agent_id TEXT,
       task_id TEXT,
       timestamp INTEGER NOT NULL
+    )
+  `);
+
+  // Comments table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comments (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      author_name TEXT NOT NULL,
+      text TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     )
   `);
 
@@ -110,6 +124,15 @@ const eventQueries = {
   getSince: db.prepare('SELECT * FROM events WHERE timestamp > ? ORDER BY timestamp DESC'),
   create: db.prepare(`
     INSERT INTO events (id, type, message, agent_id, task_id, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `),
+};
+
+// Comment queries
+const commentQueries = {
+  getByTask: db.prepare('SELECT * FROM comments WHERE task_id = ? ORDER BY created_at ASC'),
+  create: db.prepare(`
+    INSERT INTO comments (id, task_id, author_id, author_name, text, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `),
 };
@@ -242,6 +265,33 @@ export function createEvent(data) {
   );
   
   return { id, ...data, timestamp: now };
+}
+
+export function getCommentsByTask(taskId) {
+  return commentQueries.getByTask.all(taskId);
+}
+
+export function createComment(data) {
+  const id = `cmt-${randomUUID()}`;
+  const now = Date.now();
+
+  commentQueries.create.run(
+    id,
+    data.taskId,
+    data.authorId,
+    data.authorName,
+    data.text,
+    now
+  );
+
+  return {
+    id,
+    task_id: data.taskId,
+    author_id: data.authorId,
+    author_name: data.authorName,
+    text: data.text,
+    created_at: now,
+  };
 }
 
 export { db };

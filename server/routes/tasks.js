@@ -8,8 +8,11 @@ import {
   createEvent,
 } from '../db.js';
 import { schemas, validateBody, validateQuery } from '../validation.js';
+import commentsRoutes from './comments.js';
 
 const router = express.Router();
+
+router.use('/:taskId/comments', commentsRoutes);
 
 const formatTask = (task) => ({
   id: task.id,

@@ -11,8 +11,8 @@ const schemas = {
     password: z.string().min(1),
   }),
   taskCreate: z.object({
-    title: z.string().min(1),
-    description: z.string().optional(),
+    title: z.string().min(1).max(200),
+    description: z.string().max(2000).optional(),
     status: taskStatus.optional(),
     assignedAgent: z.string().optional(),
     priority: taskPriority.optional(),
@@ -20,8 +20,8 @@ const schemas = {
   }),
   taskUpdate: z
     .object({
-      title: z.string().min(1).optional(),
-      description: z.string().nullable().optional(),
+      title: z.string().min(1).max(200).optional(),
+      description: z.string().max(2000).nullable().optional(),
       status: taskStatus.optional(),
       assignedAgent: z.string().nullable().optional(),
       priority: taskPriority.nullable().optional(),
@@ -47,6 +47,9 @@ const schemas = {
   eventsQuery: z.object({
     limit: z.coerce.number().int().positive().optional(),
     since: z.coerce.number().int().optional(),
+  }),
+  commentCreate: z.object({
+    text: z.string().min(1).max(1000),
   }),
 };
 

@@ -26,9 +26,10 @@ import {
   deleteTask,
   Comment
 } from "@/lib/api";
-import { createSocket } from "@/lib/socket";
+import { createSocket, type ConnectionState } from "@/lib/socket";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import { useToast } from "@/lib/toast";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -110,6 +111,7 @@ export default function HomePage() {
   const [activeTaskId, setActiveTaskId] = React.useState<string | null>(null);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [incomingComment, setIncomingComment] = React.useState<Comment | null>(null);
+  const [connectionState, setConnectionState] = React.useState<ConnectionState>("disconnected");
   const eventRef = React.useRef<HTMLDivElement>(null);
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
@@ -172,7 +174,9 @@ export default function HomePage() {
   React.useEffect(() => {
     if (!token) return;
 
-    const socket = createSocket(token);
+    const { socket, onConnectionStateChange, getConnectionState } = createSocket(token);
+    setConnectionState(getConnectionState());
+    const unsubscribe = onConnectionStateChange(setConnectionState);
 
     socket.on("connect", () => {
       socket.emit("authenticate", { token });
@@ -212,6 +216,7 @@ export default function HomePage() {
     socket.connect();
 
     return () => {
+      unsubscribe();
       socket.disconnect();
     };
   }, [token]);
@@ -336,30 +341,33 @@ export default function HomePage() {
   return (
     <div className="min-h-screen">
       <header className="flex flex-col gap-6 border-b border-border/60 bg-card/60 px-6 py-6 backdrop-blur">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               Mission Control v2
             </p>
             <h1 className="text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
           </div>
-          <div className="flex flex-wrap gap-3 text-sm">
-            <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-              <div className="text-muted-foreground">Total Tasks</div>
-              <div className="text-2xl font-semibold">{stats.total}</div>
-            </Card>
-            <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-              <div className="text-muted-foreground">Completed Today</div>
-              <div className="text-2xl font-semibold">{stats.completedToday}</div>
-            </Card>
-            <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-              <div className="text-muted-foreground">Active Agents</div>
-              <div className="text-2xl font-semibold">{stats.activeAgents}</div>
-            </Card>
-            <Card className="flex min-w-[200px] items-center gap-3 px-4 py-3">
-              <div className="text-muted-foreground">Avg Completion</div>
-              <div className="text-2xl font-semibold">{stats.avgCompletion}h</div>
-            </Card>
+          <div className="flex flex-col items-start gap-3 text-sm lg:items-end">
+            <ConnectionStatus state={connectionState} />
+            <div className="flex flex-wrap gap-3 text-sm">
+              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
+                <div className="text-muted-foreground">Total Tasks</div>
+                <div className="text-2xl font-semibold">{stats.total}</div>
+              </Card>
+              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
+                <div className="text-muted-foreground">Completed Today</div>
+                <div className="text-2xl font-semibold">{stats.completedToday}</div>
+              </Card>
+              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
+                <div className="text-muted-foreground">Active Agents</div>
+                <div className="text-2xl font-semibold">{stats.activeAgents}</div>
+              </Card>
+              <Card className="flex min-w-[200px] items-center gap-3 px-4 py-3">
+                <div className="text-muted-foreground">Avg Completion</div>
+                <div className="text-2xl font-semibold">{stats.avgCompletion}h</div>
+              </Card>
+            </div>
           </div>
         </div>
         {loading && (

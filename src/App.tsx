@@ -7,36 +7,34 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import {
+  Agent,
+  AgentRole,
+  EventItem,
+  Task,
+  TaskStatus,
+  createTask,
+  getAgents,
+  getEvents,
+  getTasks,
+  getToken,
+  login,
+  setToken,
+  updateTask
+} from "@/lib/api";
+import { createSocket } from "@/lib/socket";
 
-type AgentRole = "Main" | "Dev" | "Research" | "Ops";
+type TaskPriority = "low" | "medium" | "high" | "critical";
 
-type Agent = {
-  id: string;
-  name: string;
-  role: AgentRole;
-  status: "online" | "offline" | "busy";
-};
+type EventPayload = { event: EventItem };
 
-type TaskStatus = "Backlog" | "Pending" | "In Progress" | "Done";
+type TaskPayload = { task: Task };
 
-type Task = {
-  id: string;
-  title: string;
-  agentId: string;
-  status: TaskStatus;
-  priority: "low" | "medium" | "high" | "critical";
-  timestamp: string;
-  completionHours?: number;
-};
+type TaskDeletedPayload = { taskId: string };
 
-type EventItem = {
-  id: string;
-  agentId: string;
-  text: string;
-  timestamp: string;
-};
+type AgentPayload = { agent: Agent };
 
-const roles: Array<{ label: string; value: string }> = [
+const roles: Array<{ label: string; value: AgentRole | "All" }> = [
   { label: "All", value: "All" },
   { label: "Main", value: "Main" },
   { label: "Dev", value: "Dev" },
@@ -44,106 +42,16 @@ const roles: Array<{ label: string; value: string }> = [
   { label: "Ops", value: "Ops" }
 ];
 
-const columns: TaskStatus[] = ["Backlog", "Pending", "In Progress", "Done"];
+const columns: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
 
-const initialAgents: Agent[] = [
-  { id: "a1", name: "Orion", role: "Main", status: "online" },
-  { id: "a2", name: "Nyx", role: "Dev", status: "busy" },
-  { id: "a3", name: "Kepler", role: "Research", status: "online" },
-  { id: "a4", name: "Vega", role: "Ops", status: "offline" },
-  { id: "a5", name: "Nova", role: "Dev", status: "online" }
-];
+const columnLabels: Record<TaskStatus, string> = {
+  backlog: "Backlog",
+  todo: "To Do",
+  "in-progress": "In Progress",
+  done: "Done"
+};
 
-const now = new Date();
-const iso = (date: Date) => date.toISOString();
-
-const initialTasks: Task[] = [
-  {
-    id: "t1",
-    title: "Route priority signals to orchestrator",
-    agentId: "a1",
-    status: "Backlog",
-    priority: "medium",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 60 * 6))
-  },
-  {
-    id: "t2",
-    title: "Draft retry policy for flaky toolchain",
-    agentId: "a3",
-    status: "Pending",
-    priority: "high",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 45))
-  },
-  {
-    id: "t3",
-    title: "Instrument live agent presence stream",
-    agentId: "a2",
-    status: "In Progress",
-    priority: "critical",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 12))
-  },
-  {
-    id: "t4",
-    title: "Reconcile webhook delivery backlog",
-    agentId: "a4",
-    status: "Backlog",
-    priority: "low",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 90))
-  },
-  {
-    id: "t5",
-    title: "Finalize agent heartbeat UI states",
-    agentId: "a5",
-    status: "Done",
-    priority: "medium",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 25)),
-    completionHours: 2.1
-  },
-  {
-    id: "t6",
-    title: "Deploy kanban state snapshot sync",
-    agentId: "a1",
-    status: "Done",
-    priority: "high",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 130)),
-    completionHours: 3.4
-  }
-];
-
-const initialEvents: EventItem[] = [
-  {
-    id: "e1",
-    agentId: "a2",
-    text: "Started task: Instrument live agent presence stream",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 10))
-  },
-  {
-    id: "e2",
-    agentId: "a3",
-    text: "Queued task: Draft retry policy for flaky toolchain",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 25))
-  },
-  {
-    id: "e3",
-    agentId: "a5",
-    text: "Completed task: Finalize agent heartbeat UI states",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 32))
-  },
-  {
-    id: "e4",
-    agentId: "a1",
-    text: "Synced backlog with control plane",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 50))
-  },
-  {
-    id: "e5",
-    agentId: "a4",
-    text: "Agent offline: awaiting ops approval",
-    timestamp: iso(new Date(now.getTime() - 1000 * 60 * 70))
-  }
-];
-
-const priorityVariant: Record<Task["priority"], Parameters<typeof Badge>[0]["variant"]> = {
+const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
   low: "outline",
   medium: "default",
   high: "warning",
@@ -162,14 +70,35 @@ const statusRing: Record<Agent["status"], string> = {
   offline: "ring-slate-500/40"
 };
 
-const formatTime = (value: string) =>
+const formatTime = (value: number) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+const upsertById = <T extends { id: string }>(items: T[], item: T, prepend = false) => {
+  const index = items.findIndex((existing) => existing.id === item.id);
+  if (index === -1) {
+    return prepend ? [item, ...items] : [...items, item];
+  }
+  const next = [...items];
+  next[index] = item;
+  return next;
+};
+
+const addEvent = (items: EventItem[], event: EventItem) => {
+  if (items.some((existing) => existing.id === event.id)) {
+    return items;
+  }
+  return [...items, event];
+};
+
 export default function HomePage() {
-  const [selectedRole, setSelectedRole] = React.useState("All");
+  const [selectedRole, setSelectedRole] = React.useState<AgentRole | "All">("All");
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
-  const [tasks, setTasks] = React.useState<Task[]>(initialTasks);
-  const [events, setEvents] = React.useState<EventItem[]>(initialEvents);
+  const [tasks, setTasks] = React.useState<Task[]>([]);
+  const [agents, setAgents] = React.useState<Agent[]>([]);
+  const [events, setEvents] = React.useState<EventItem[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [token, setTokenState] = React.useState<string | null>(getToken());
   const eventRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -177,7 +106,91 @@ export default function HomePage() {
     eventRef.current.scrollTop = eventRef.current.scrollHeight;
   }, [events]);
 
-  const agents = React.useMemo(() => initialAgents, []);
+  React.useEffect(() => {
+    let mounted = true;
+
+    const bootstrap = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        let activeToken = getToken();
+        if (!activeToken) {
+          const username = import.meta.env.VITE_ADMIN_USERNAME || "patch";
+          const password = import.meta.env.VITE_ADMIN_PASSWORD || "REDACTED";
+          const response = await login(username, password);
+          setToken(response.token);
+          setTokenState(response.token);
+          activeToken = response.token;
+        } else {
+          setTokenState(activeToken);
+        }
+
+        const [tasksResponse, agentsResponse, eventsResponse] = await Promise.all([
+          getTasks(),
+          getAgents(),
+          getEvents()
+        ]);
+
+        if (!mounted) return;
+
+        setTasks(tasksResponse.tasks);
+        setAgents(agentsResponse.agents);
+        setEvents(eventsResponse.events.slice().reverse());
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : "Failed to load mission data");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!token) return;
+
+    const socket = createSocket(token);
+
+    socket.on("connect", () => {
+      socket.emit("authenticate", { token });
+    });
+
+    socket.on("task.created", (payload: TaskPayload) => {
+      setTasks((prev) => upsertById(prev, payload.task, true));
+    });
+
+    socket.on("task.updated", (payload: TaskPayload) => {
+      setTasks((prev) => upsertById(prev, payload.task));
+    });
+
+    socket.on("task.deleted", (payload: TaskDeletedPayload) => {
+      setTasks((prev) => prev.filter((task) => task.id !== payload.taskId));
+    });
+
+    socket.on("agent.status_changed", (payload: AgentPayload) => {
+      setAgents((prev) => upsertById(prev, payload.agent));
+    });
+
+    socket.on("event.new", (payload: EventPayload) => {
+      setEvents((prev) => addEvent(prev, payload.event));
+    });
+
+    socket.on("auth_error", (payload: { error?: string }) => {
+      setError(payload?.error || "Socket authentication failed");
+    });
+
+    socket.connect();
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token]);
 
   const visibleAgents = React.useMemo(() => {
     if (selectedRole === "All") return agents;
@@ -186,14 +199,14 @@ export default function HomePage() {
 
   const filteredTasks = React.useMemo(() => {
     if (!selectedAgentId) return tasks;
-    return tasks.filter((task) => task.agentId === selectedAgentId);
+    return tasks.filter((task) => task.assignedAgent === selectedAgentId);
   }, [tasks, selectedAgentId]);
 
   const stats = React.useMemo(() => {
-    const completed = tasks.filter((task) => task.status === "Done");
+    const completed = tasks.filter((task) => task.status === "done");
     const today = new Date();
     const completedToday = completed.filter((task) => {
-      const date = new Date(task.timestamp);
+      const date = new Date(task.updatedAt ?? task.createdAt);
       return (
         date.getFullYear() === today.getFullYear() &&
         date.getMonth() === today.getMonth() &&
@@ -202,7 +215,9 @@ export default function HomePage() {
     });
     const activeAgents = agents.filter((agent) => agent.status !== "offline").length;
     const avgCompletion = completed.length
-      ? completed.reduce((sum, task) => sum + (task.completionHours ?? 0), 0) / completed.length
+      ? completed.reduce((sum, task) => sum + (task.updatedAt - task.createdAt), 0) /
+        completed.length /
+        36e5
       : 0;
 
     return {
@@ -218,33 +233,44 @@ export default function HomePage() {
     event.dataTransfer.effectAllowed = "move";
   };
 
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>, status: TaskStatus) => {
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>, status: TaskStatus) => {
     event.preventDefault();
     const taskId = event.dataTransfer.getData("text/plain");
+    const existing = tasks.find((task) => task.id === taskId);
+    if (!existing || existing.status === status) return;
+
     setTasks((prev) =>
       prev.map((task) => (task.id === taskId ? { ...task, status } : task))
     );
+
+    try {
+      await updateTask(taskId, { status });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update task");
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === taskId ? { ...task, status: existing.status } : task
+        )
+      );
+    }
   };
 
-  const handleAddTask = () => {
-    const newTask: Task = {
-      id: `t${tasks.length + 1}`,
-      title: "New orchestration request",
-      agentId: agents[0]?.id ?? "a1",
-      status: "Pending",
-      priority: "medium",
-      timestamp: new Date().toISOString()
-    };
-    setTasks((prev) => [newTask, ...prev]);
-    setEvents((prev) => [
-      ...prev,
-      {
-        id: `e${prev.length + 1}`,
-        agentId: newTask.agentId,
-        text: `Queued task: ${newTask.title}`,
-        timestamp: newTask.timestamp
-      }
-    ]);
+  const handleAddTask = async () => {
+    setError(null);
+
+    try {
+      const assignedAgent = agents[0]?.id ?? null;
+      const response = await createTask({
+        title: "New orchestration request",
+        status: "todo",
+        assignedAgent,
+        priority: "medium",
+        tags: []
+      });
+      setTasks((prev) => upsertById(prev, response.task, true));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create task");
+    }
   };
 
   const agentById = React.useMemo(() => {
@@ -283,6 +309,14 @@ export default function HomePage() {
             </Card>
           </div>
         </div>
+        {loading && (
+          <p className="text-sm text-muted-foreground">Loading mission data...</p>
+        )}
+        {error && (
+          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
+            {error}
+          </div>
+        )}
       </header>
 
       <main className="grid gap-6 px-6 py-6 lg:grid-cols-[260px_1fr_320px]">
@@ -340,6 +374,9 @@ export default function HomePage() {
                     </div>
                   </button>
                 ))}
+                {!visibleAgents.length && (
+                  <p className="text-xs text-muted-foreground">No agents online yet.</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -375,7 +412,9 @@ export default function HomePage() {
               </p>
               <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
             </div>
-            <Button onClick={handleAddTask}>Add New Task</Button>
+            <Button onClick={handleAddTask} disabled={loading}>
+              Add New Task
+            </Button>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-4">
@@ -388,7 +427,7 @@ export default function HomePage() {
               >
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    {column}
+                    {columnLabels[column]}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {filteredTasks.filter((task) => task.status === column).length}
@@ -398,7 +437,9 @@ export default function HomePage() {
                   {filteredTasks
                     .filter((task) => task.status === column)
                     .map((task) => {
-                      const agent = agentById[task.agentId];
+                      const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
+                      const priority = (task.priority || "low") as TaskPriority;
+                      const timestamp = task.updatedAt ?? task.createdAt;
                       return (
                         <Card
                           key={task.id}
@@ -411,9 +452,7 @@ export default function HomePage() {
                               <h3 className="text-sm font-semibold leading-snug">
                                 {task.title}
                               </h3>
-                              <Badge variant={priorityVariant[task.priority]}>
-                                {task.priority}
-                              </Badge>
+                              <Badge variant={priorityVariant[priority]}>{priority}</Badge>
                             </div>
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
                               <div className="flex items-center gap-2">
@@ -427,7 +466,7 @@ export default function HomePage() {
                                 </Avatar>
                                 <span>{agent?.name ?? "Unassigned"}</span>
                               </div>
-                              <span className="font-mono">{formatTime(task.timestamp)}</span>
+                              <span className="font-mono">{formatTime(timestamp)}</span>
                             </div>
                           </CardHeader>
                         </Card>
@@ -457,13 +496,15 @@ export default function HomePage() {
               <ScrollArea ref={eventRef} className="h-[420px] space-y-4 pr-2">
                 <div className="space-y-4">
                   {events.map((event) => {
-                    const agent = agentById[event.agentId];
+                    const agent = event.agentId ? agentById[event.agentId] : null;
                     return (
                       <div
                         key={event.id}
                         className="flex gap-3 rounded-xl border border-border/60 bg-muted/30 p-3"
                       >
-                        <Avatar className={cn("ring-2", statusRing[agent?.status ?? "online"]) }>
+                        <Avatar
+                          className={cn("ring-2", statusRing[agent?.status ?? "online"])}
+                        >
                           <AvatarFallback>
                             {agent?.name
                               ?.split(" ")
@@ -473,7 +514,7 @@ export default function HomePage() {
                         </Avatar>
                         <div className="flex-1">
                           <p className="text-sm font-semibold">{agent?.name ?? "System"}</p>
-                          <p className="text-xs text-muted-foreground">{event.text}</p>
+                          <p className="text-xs text-muted-foreground">{event.message}</p>
                         </div>
                         <span className="text-xs text-muted-foreground font-mono">
                           {formatTime(event.timestamp)}

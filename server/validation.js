@@ -1,0 +1,73 @@
+import { z } from 'zod';
+
+const taskStatus = z.enum(['backlog', 'todo', 'in-progress', 'done']);
+const agentRole = z.enum(['Main', 'Dev', 'Research', 'Ops']);
+const agentStatus = z.enum(['online', 'offline', 'busy']);
+const taskPriority = z.enum(['low', 'medium', 'high', 'critical']);
+
+const schemas = {
+  login: z.object({
+    username: z.string().min(1),
+    password: z.string().min(1),
+  }),
+  taskCreate: z.object({
+    title: z.string().min(1),
+    description: z.string().optional(),
+    status: taskStatus.optional(),
+    assignedAgent: z.string().optional(),
+    priority: taskPriority.optional(),
+    tags: z.array(z.string()).optional(),
+  }),
+  taskUpdate: z
+    .object({
+      title: z.string().min(1).optional(),
+      description: z.string().nullable().optional(),
+      status: taskStatus.optional(),
+      assignedAgent: z.string().nullable().optional(),
+      priority: taskPriority.nullable().optional(),
+      tags: z.array(z.string()).optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, {
+      message: 'At least one field must be updated',
+    }),
+  taskQuery: z.object({
+    status: taskStatus.optional(),
+    agent: z.string().optional(),
+  }),
+  agentUpdate: z
+    .object({
+      name: z.string().min(1).optional(),
+      role: agentRole.optional(),
+      status: agentStatus.optional(),
+      avatarColor: z.string().optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, {
+      message: 'At least one field must be updated',
+    }),
+  eventsQuery: z.object({
+    limit: z.coerce.number().int().positive().optional(),
+    since: z.coerce.number().int().optional(),
+  }),
+};
+
+const validateBody = (schema) => (req, res, next) => {
+  try {
+    req.body = schema.parse(req.body);
+    next();
+  } catch (err) {
+    const details = err.issues ?? err.errors ?? [];
+    return res.status(400).json({ error: 'Invalid request body', details });
+  }
+};
+
+const validateQuery = (schema) => (req, res, next) => {
+  try {
+    req.query = schema.parse(req.query);
+    next();
+  } catch (err) {
+    const details = err.issues ?? err.errors ?? [];
+    return res.status(400).json({ error: 'Invalid query parameters', details });
+  }
+};
+
+export { schemas, validateBody, validateQuery };

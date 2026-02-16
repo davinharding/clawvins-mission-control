@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Environment
+.env
+.env.local
+
+# SQLite
+/data/mission-control.db*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

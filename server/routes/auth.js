@@ -1,45 +1,43 @@
 import express from 'express';
 import { generateToken } from '../auth.js';
+import { getAgentById, createAgent } from '../db.js';
+import { schemas, validateBody } from '../validation.js';
 
 const router = express.Router();
 
-// Hardcoded user for MVP (would use database in production)
-const ADMIN_USER = {
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'patch';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'REDACTED';
+
+const DEFAULT_USER = {
   id: 'agent-patch',
   name: 'Patch',
   role: 'Dev',
-  username: process.env.ADMIN_USERNAME || 'patch',
-  password: process.env.ADMIN_PASSWORD || 'dev-password',
 };
 
-// POST /api/auth/login
-router.post('/login', (req, res) => {
-  try {
-    const { username, password } = req.body;
-    
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password required' });
-    }
-    
-    // Simple credential check (MVP - would check database in production)
-    if (username !== ADMIN_USER.username || password !== ADMIN_USER.password) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    
-    const token = generateToken(ADMIN_USER);
-    
-    res.json({
-      token,
-      user: {
-        id: ADMIN_USER.id,
-        name: ADMIN_USER.name,
-        role: ADMIN_USER.role,
-      },
-    });
-  } catch (err) {
-    console.error('Error during login:', err);
-    res.status(500).json({ error: 'Internal server error' });
+router.post('/login', validateBody(schemas.login), (req, res) => {
+  const { username, password } = req.body;
+
+  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Invalid credentials' });
   }
+
+  const existing = getAgentById(DEFAULT_USER.id);
+  if (!existing) {
+    createAgent({
+      id: DEFAULT_USER.id,
+      name: DEFAULT_USER.name,
+      role: DEFAULT_USER.role,
+      status: 'online',
+      avatarColor: '#3b82f6',
+    });
+  }
+
+  const token = generateToken(DEFAULT_USER);
+
+  res.json({
+    token,
+    user: DEFAULT_USER,
+  });
 });
 
 export default router;

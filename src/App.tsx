@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -67,6 +68,30 @@ const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge
   critical: "danger"
 };
 
+type ColumnSort =
+  | "priority-desc"
+  | "priority-asc"
+  | "created-desc"
+  | "created-asc"
+  | "updated-desc"
+  | "updated-asc";
+
+const columnSortOptions: Array<{ label: string; value: ColumnSort }> = [
+  { label: "Priority (High → Low)", value: "priority-desc" },
+  { label: "Priority (Low → High)", value: "priority-asc" },
+  { label: "Created (Newest)", value: "created-desc" },
+  { label: "Created (Oldest)", value: "created-asc" },
+  { label: "Updated (Newest)", value: "updated-desc" },
+  { label: "Updated (Oldest)", value: "updated-asc" },
+];
+
+const priorityWeight: Record<NonNullable<TaskPriority>, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+  critical: 4,
+};
+
 const statusColor: Record<Agent["status"], string> = {
   online: "bg-emerald-400",
   busy: "bg-amber-400",
@@ -92,12 +117,42 @@ const upsertById = <T extends { id: string }>(items: T[], item: T, prepend = fal
   return next;
 };
 
-const addEvent = (items: EventItem[], event: EventItem) => {
-  if (items.some((existing) => existing.id === event.id)) {
-    return items;
+const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
+  const merged = new Map<string, EventItem>();
+  items.forEach((event) => merged.set(event.id, event));
+  incoming.forEach((event) => merged.set(event.id, event));
+  return Array.from(merged.values()).sort((a, b) => b.timestamp - a.timestamp);
+};
+
+const sortTasks = (items: Task[], sort: ColumnSort) => {
+  const sorted = [...items];
+  const byPriority = (task: Task) => priorityWeight[(task.priority || "low") as NonNullable<TaskPriority>] ?? 0;
+  const byCreated = (task: Task) => task.createdAt ?? 0;
+  const byUpdated = (task: Task) => task.updatedAt ?? task.createdAt ?? 0;
+
+  switch (sort) {
+    case "priority-asc":
+      sorted.sort((a, b) => byPriority(a) - byPriority(b));
+      break;
+    case "priority-desc":
+      sorted.sort((a, b) => byPriority(b) - byPriority(a));
+      break;
+    case "created-asc":
+      sorted.sort((a, b) => byCreated(a) - byCreated(b));
+      break;
+    case "created-desc":
+      sorted.sort((a, b) => byCreated(b) - byCreated(a));
+      break;
+    case "updated-asc":
+      sorted.sort((a, b) => byUpdated(a) - byUpdated(b));
+      break;
+    case "updated-desc":
+      sorted.sort((a, b) => byUpdated(b) - byUpdated(a));
+      break;
+    default:
+      return sorted;
   }
-  // Add new event at the beginning (newest first)
-  return [event, ...items];
+  return sorted;
 };
 
 export default function HomePage() {
@@ -113,13 +168,19 @@ export default function HomePage() {
   const [modalOpen, setModalOpen] = React.useState(false);
   const [incomingComment, setIncomingComment] = React.useState<Comment | null>(null);
   const [connectionState, setConnectionState] = React.useState<ConnectionState>("disconnected");
+  const [columnSorts, setColumnSorts] = React.useState<Record<TaskStatus, ColumnSort>>({
+    backlog: "priority-desc",
+    todo: "priority-desc",
+    "in-progress": "priority-desc",
+    done: "priority-desc",
+  });
   const eventRef = React.useRef<HTMLDivElement>(null);
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
 
   React.useEffect(() => {
     if (!eventRef.current) return;
-    eventRef.current.scrollTop = eventRef.current.scrollHeight;
+    eventRef.current.scrollTop = 0;
   }, [events]);
 
   React.useEffect(() => {
@@ -156,7 +217,7 @@ export default function HomePage() {
 
         setTasks(tasksResponse.tasks);
         setAgents(agentsResponse.agents);
-        setEvents(eventsResponse.events);
+        setEvents(mergeEvents([], eventsResponse.events));
       } catch (err) {
         if (!mounted) return;
         setError(err instanceof Error ? err.message : "Failed to load mission data");
@@ -203,7 +264,7 @@ export default function HomePage() {
     });
 
     socket.on("event.new", (payload: EventPayload) => {
-      setEvents((prev) => addEvent(prev, payload.event));
+      setEvents((prev) => mergeEvents(prev, [payload.event]));
     });
 
     socket.on("comment.created", (payload: CommentPayload) => {
@@ -384,248 +445,277 @@ export default function HomePage() {
       </header>
 
       <main className="flex-1 overflow-hidden">
-        <div className="grid h-full gap-6 px-6 py-6 lg:grid-cols-[260px_1fr_320px]">
-        <aside className="flex h-full flex-col space-y-6 overflow-y-auto">
-          <Card>
-            <CardHeader className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-                Agent Filters
-              </p>
-              <Tabs value={selectedRole} onValueChange={(v) => setSelectedRole(v as AgentRole | "All")} options={roles} />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between text-xs font-semibold uppercase text-muted-foreground">
-                <span>Agents</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedAgentId(null)}
-                  className="text-primary"
-                >
-                  Clear
-                </button>
-              </div>
-              <div className="space-y-2">
-                {visibleAgents.map((agent) => (
+        <div className="grid h-full grid-cols-1 gap-6 px-6 py-6 md:grid-cols-[1fr_300px] lg:grid-cols-[240px_1fr_360px]">
+          <aside className="flex h-full flex-col space-y-6 overflow-y-auto md:hidden lg:flex">
+            <Card>
+              <CardHeader className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+                  Agent Filters
+                </p>
+                <Tabs value={selectedRole} onValueChange={(v) => setSelectedRole(v as AgentRole | "All")} options={roles} />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase text-muted-foreground">
+                  <span>Agents</span>
                   <button
-                    key={agent.id}
                     type="button"
-                    onClick={() => setSelectedAgentId(agent.id)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
-                      selectedAgentId === agent.id
-                        ? "border-primary/60 bg-primary/10"
-                        : "border-border/70 hover:bg-muted/60"
-                    )}
+                    onClick={() => setSelectedAgentId(null)}
+                    className="text-primary"
                   >
-                    <Avatar className={cn("ring-2", statusRing[agent.status])}>
-                      <AvatarFallback>
-                        {agent.name
-                          .split(" ")
-                          .map((part) => part[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold">{agent.name}</span>
-                        <span
-                          className={cn(
-                            "h-2.5 w-2.5 rounded-full",
-                            statusColor[agent.status]
-                          )}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground">{agent.role}</p>
-                    </div>
+                    Clear
                   </button>
-                ))}
-                {!visibleAgents.length && (
-                  <p className="text-xs text-muted-foreground">No agents online yet.</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-                Status Legend
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                Online
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                Busy
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-                Offline
-              </div>
-            </CardContent>
-          </Card>
-        </aside>
-
-        <section className="flex h-full flex-col space-y-4 overflow-y-auto">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                Kanban Board
-              </p>
-              <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
-            </div>
-            <Button onClick={handleAddTask} disabled={loading}>
-              Add New Task
-            </Button>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-4">
-            {columns.map((column) => (
-              <div
-                key={column}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => handleDrop(event, column)}
-                className="flex flex-col rounded-2xl border border-dashed border-border/70 bg-card/40 p-3"
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    {columnLabels[column]}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {filteredTasks.filter((task) => task.status === column).length}
-                  </span>
                 </div>
-                <div className="flex flex-1 flex-col gap-3">
-                  {filteredTasks
-                    .filter((task) => task.status === column)
-                    .map((task) => {
-                      const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
-                      const priority = (task.priority || "low") as TaskPriority;
-                      const timestamp = task.updatedAt ?? task.createdAt;
-                      return (
-                        <Card
-                          key={task.id}
-                          draggable
-                          onDragStart={(event) => handleDragStart(event, task.id)}
-                          onClick={() => {
-                            setActiveTaskId(task.id);
-                            setModalOpen(true);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              setActiveTaskId(task.id);
-                              setModalOpen(true);
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                          className="cursor-grab active:cursor-grabbing"
-                        >
-                          <CardHeader className="space-y-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <h3 className="text-sm font-semibold leading-snug">
-                                {task.title}
-                              </h3>
-                              <Badge variant={priorityVariant[priority]}>{priority}</Badge>
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-7 w-7">
-                                  <AvatarFallback>
-                                    {agent?.name
-                                      ?.split(" ")
-                                      .map((part) => part[0])
-                                      .join("")}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span>{agent?.name ?? "Unassigned"}</span>
-                              </div>
-                              <span className="font-mono">{formatTime(timestamp)}</span>
-                            </div>
-                          </CardHeader>
-                        </Card>
-                      );
-                    })}
+                <div className="space-y-2">
+                  {visibleAgents.map((agent) => (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      onClick={() => setSelectedAgentId(agent.id)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+                        selectedAgentId === agent.id
+                          ? "border-primary/60 bg-primary/10"
+                          : "border-border/70 hover:bg-muted/60"
+                      )}
+                    >
+                      <Avatar className={cn("ring-2", statusRing[agent.status])}>
+                        <AvatarFallback>
+                          {agent.name
+                            .split(" ")
+                            .map((part) => part[0])
+                            .join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold">{agent.name}</span>
+                          <span
+                            className={cn(
+                              "h-2.5 w-2.5 rounded-full",
+                              statusColor[agent.status]
+                            )}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">{agent.role}</p>
+                      </div>
+                    </button>
+                  ))}
+                  {!visibleAgents.length && (
+                    <p className="text-xs text-muted-foreground">No agents online yet.</p>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
+              </CardContent>
+            </Card>
 
-        <aside className="flex h-full flex-col">
-          <Card className="flex flex-1 flex-col overflow-hidden">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-                    Live Feed
-                  </p>
-                  <h3 className="text-lg font-semibold">Agent Events</h3>
+            <Card>
+              <CardHeader>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+                  Status Legend
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  Online
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">Realtime</Badge>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={async () => {
-                      try {
-                        const eventsResponse = await getEvents();
-                        setEvents(eventsResponse.events);
-                      } catch (err) {
-                        console.error('Failed to refresh events:', err);
-                      }
-                    }}
-                    className="h-7 px-2"
-                  >
-                    ↻
-                  </Button>
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  Busy
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+                  Offline
+                </div>
+              </CardContent>
+            </Card>
+          </aside>
+
+          <section className="flex h-full flex-col space-y-4 overflow-y-auto">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  Kanban Board
+                </p>
+                <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
               </div>
-            </CardHeader>
-            <Separator />
-            <CardContent className="flex-1 overflow-hidden p-4">
-              <ScrollArea ref={eventRef} className="h-full pr-2">
-                <div className="space-y-4">
-                  {events.map((event, index) => {
-                    const agent = event.agentId ? agentById[event.agentId] : null;
-                    const isNew = index === 0; // First item is newest
-                    return (
-                      <div
-                        key={event.id}
-                        className={cn(
-                          "flex gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 transition-all",
-                          isNew && "animate-in slide-in-from-top duration-300"
-                        )}
-                      >
-                        <Avatar
-                          className={cn("ring-2", statusRing[agent?.status ?? "online"])}
-                        >
-                          <AvatarFallback>
-                            {agent?.name
-                              ?.split(" ")
-                              .map((part) => part[0])
-                              .join("") ?? "MC"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold">{agent?.name ?? "System"}</p>
-                          <p className="text-xs text-muted-foreground">{event.message}</p>
-                        </div>
-                        <span className="text-xs text-muted-foreground font-mono">
-                          {formatTime(event.timestamp)}
+              <Button onClick={handleAddTask} disabled={loading}>
+                Add New Task
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {columns.map((column) => {
+                const columnTasks = sortTasks(
+                  filteredTasks.filter((task) => task.status === column),
+                  columnSorts[column]
+                );
+                return (
+                  <div
+                    key={column}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => handleDrop(event, column)}
+                    className="flex flex-col rounded-2xl border border-dashed border-border/70 bg-card/40 p-3"
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        {columnLabels[column]}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {columnTasks.length}
                         </span>
+                        <Select
+                          aria-label={`Sort ${columnLabels[column]} tasks`}
+                          value={columnSorts[column]}
+                          onChange={(event) =>
+                            setColumnSorts((prev) => ({
+                              ...prev,
+                              [column]: event.target.value as ColumnSort,
+                            }))
+                          }
+                          className="h-7 w-[160px] rounded-lg border-border/60 bg-muted/40 px-2 text-[11px]"
+                        >
+                          {columnSortOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </Select>
                       </div>
-                    );
-                  })}
+                    </div>
+                    <div className="flex flex-1 flex-col gap-3">
+                      {columnTasks.map((task) => {
+                        const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
+                        const priority = (task.priority || "low") as TaskPriority;
+                        const timestamp = task.updatedAt ?? task.createdAt;
+                        return (
+                          <Card
+                            key={task.id}
+                            draggable
+                            onDragStart={(event) => handleDragStart(event, task.id)}
+                            onClick={() => {
+                              setActiveTaskId(task.id);
+                              setModalOpen(true);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setActiveTaskId(task.id);
+                                setModalOpen(true);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            className="cursor-grab active:cursor-grabbing"
+                          >
+                            <CardHeader className="space-y-2 p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <h3 className="text-sm font-semibold leading-snug">
+                                  {task.title}
+                                </h3>
+                                <Badge
+                                  variant={priorityVariant[priority]}
+                                  className="px-2 py-0.5 text-[10px] uppercase tracking-wide"
+                                >
+                                  {priority}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-7 w-7">
+                                    <AvatarFallback>
+                                      {agent?.name
+                                        ?.split(" ")
+                                        .map((part) => part[0])
+                                        .join("")}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span>{agent?.name ?? "Unassigned"}</span>
+                                </div>
+                                <span className="font-mono">{formatTime(timestamp)}</span>
+                              </div>
+                            </CardHeader>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <aside className="flex h-full flex-col">
+            <Card className="flex flex-1 flex-col overflow-hidden">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+                      Live Feed
+                    </p>
+                    <h3 className="text-lg font-semibold">Agent Events</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">Realtime</Badge>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        try {
+                          const eventsResponse = await getEvents();
+                          setEvents((prev) => mergeEvents(prev, eventsResponse.events));
+                        } catch (err) {
+                          console.error('Failed to refresh events:', err);
+                        }
+                      }}
+                      className="h-7 px-2"
+                      aria-label="Refresh events"
+                    >
+                      ↻
+                    </Button>
+                  </div>
                 </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </aside>
+              </CardHeader>
+              <Separator />
+              <CardContent className="flex-1 overflow-hidden p-4">
+                <ScrollArea ref={eventRef} className="h-full pr-2">
+                  <div className="space-y-4">
+                    {events.map((event, index) => {
+                      const agent = event.agentId ? agentById[event.agentId] : null;
+                      const isNew = index === 0; // First item is newest
+                      return (
+                        <div
+                          key={event.id}
+                          className={cn(
+                            "flex gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 transition-all",
+                            isNew && "animate-in slide-in-from-top duration-300"
+                          )}
+                        >
+                          <Avatar
+                            className={cn("ring-2", statusRing[agent?.status ?? "online"])}
+                          >
+                            <AvatarFallback>
+                              {agent?.name
+                                ?.split(" ")
+                                .map((part) => part[0])
+                                .join("") ?? "MC"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold">{agent?.name ?? "System"}</p>
+                            <p className="text-xs text-muted-foreground">{event.message}</p>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {formatTime(event.timestamp)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </aside>
         </div>
       </main>
 

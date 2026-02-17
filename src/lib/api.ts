@@ -178,13 +178,17 @@ export async function getComments(taskId: string) {
   });
 }
 
-export async function createComment(taskId: string, text: string) {
+export async function createComment(
+  taskId: string,
+  text: string,
+  author?: { authorId?: string; authorName?: string }
+) {
   return request<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...author }),
   });
 }

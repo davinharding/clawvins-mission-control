@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { Toast, ToastContext } from "@/lib/toast";
+import { type Toast, ToastContext } from "@/lib/toast";
 
 const createId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto

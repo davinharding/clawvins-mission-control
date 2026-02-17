@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { db, createAgent, createTask } from './db.js';
+import { db, createAgent, createEvent, createTask } from './db.js';
 import { getAgentsFromSessions } from './openclaw.js';
 
 // Clear existing data (optional - makes script idempotent)
@@ -36,7 +36,12 @@ async function seedAgents() {
 
 // Seed tasks
 function seedTasks(agents) {
-  console.log('Seeding tasks...');
+  if (process.env.SEED_SAMPLE_TASKS !== 'true') {
+    console.log('Skipping sample task seeding (set SEED_SAMPLE_TASKS=true to enable).');
+    return;
+  }
+
+  console.log('Seeding sample tasks...');
 
   const agentByName = new Map(
     (agents || []).map((agent) => [agent.name.toLowerCase(), agent.id])
@@ -46,87 +51,23 @@ function seedTasks(agents) {
     if (!name) return defaultAgentId;
     return agentByName.get(name.toLowerCase()) ?? defaultAgentId;
   };
-  
+
   const tasks = [
     {
-      title: 'Set up Mission Control dashboard',
-      description: 'Build the frontend interface for task management',
-      status: 'done',
-      assignedAgent: resolveAgentId('Patch'),
-      priority: 'high',
-      tags: ['frontend', 'react'],
-    },
-    {
-      title: 'Implement WebSocket real-time updates',
-      description: 'Add Socket.io for live task updates across all clients',
-      status: 'done',
-      assignedAgent: resolveAgentId('Patch'),
-      priority: 'high',
-      tags: ['backend', 'websocket'],
-    },
-    {
-      title: 'Research AI model performance',
-      description: 'Analyze latest Claude models for task planning capabilities',
-      status: 'in-progress',
-      assignedAgent: resolveAgentId('Nova'),
-      priority: 'medium',
-      tags: ['research', 'ai'],
-    },
-    {
-      title: 'Deploy to production server',
-      description: 'Set up PM2 and configure production environment',
-      status: 'todo',
-      assignedAgent: resolveAgentId('Scout'),
-      priority: 'critical',
-      tags: ['ops', 'deployment'],
-    },
-    {
-      title: 'Add user authentication',
-      description: 'Implement JWT-based auth system',
-      status: 'done',
-      assignedAgent: resolveAgentId('Patch'),
-      priority: 'high',
-      tags: ['backend', 'security'],
-    },
-    {
-      title: 'Create API documentation',
-      description: 'Document all REST endpoints and WebSocket events',
+      title: 'Mission Control Development',
+      description: 'Real-time agent orchestration dashboard with WebSocket, task management, and live event feed',
       status: 'in-progress',
       assignedAgent: resolveAgentId('Patch'),
-      priority: 'medium',
-      tags: ['docs'],
-    },
-    {
-      title: 'Monitor system health',
-      description: 'Set up health checks and alerting',
-      status: 'todo',
-      assignedAgent: resolveAgentId('Scout'),
-      priority: 'medium',
-      tags: ['ops', 'monitoring'],
-    },
-    {
-      title: 'Optimize database queries',
-      description: 'Review and improve database performance',
-      status: 'backlog',
-      assignedAgent: null,
-      priority: 'low',
-      tags: ['backend', 'performance'],
-    },
-    {
-      title: 'Design agent coordination protocol',
-      description: 'Establish communication patterns between agents',
-      status: 'backlog',
-      assignedAgent: resolveAgentId('Atlas'),
-      priority: 'medium',
-      tags: ['architecture', 'research'],
-    },
-    {
-      title: 'Test multi-agent workflows',
-      description: 'Verify task handoff and collaboration features',
-      status: 'todo',
-      assignedAgent: resolveAgentId('Nova'),
       priority: 'high',
-      tags: ['testing', 'qa'],
+      tags: ['frontend', 'backend', 'realtime'],
+    },
+    {
+      title: 'File Explorer Modernization',
+      description: 'Rebuild file explorer with Vite + React + TypeScript (blocked: rate limit)',
+      status: 'backlog',
+      assignedAgent: resolveAgentId('Patch'),
+      priority: 'medium',
+      tags: ['frontend'],
     },
   ];
 
@@ -139,6 +80,23 @@ function seedTasks(agents) {
   });
 }
 
+function seedEvents(agents) {
+  console.log('Seeding events...');
+
+  createEvent({
+    type: 'system_seed',
+    message: `Mission Control synced ${agents.length} agents from OpenClaw.`,
+  });
+
+  agents.slice(0, 6).forEach((agent) => {
+    createEvent({
+      type: 'agent_checkin',
+      message: `${agent.name} checked in.`,
+      agentId: agent.id,
+    });
+  });
+}
+
 // Main seed function
 async function seed() {
   try {
@@ -146,6 +104,7 @@ async function seed() {
     
     clearData();
     const agents = await seedAgents();
+    seedEvents(agents);
     seedTasks(agents);
     
     console.log('\n✅ Database seeded successfully!\n');

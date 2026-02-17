@@ -24,7 +24,7 @@ import {
   setToken,
   updateTask,
   deleteTask,
-  Comment
+  type Comment
 } from "@/lib/api";
 import { createSocket, type ConnectionState } from "@/lib/socket";
 import { TaskEditModal } from "@/components/TaskEditModal";
@@ -302,6 +302,8 @@ export default function HomePage() {
         tags: []
       });
       setTasks((prev) => upsertById(prev, response.task, true));
+      setActiveTaskId(response.task.id);
+      setModalOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create task");
       notify({
@@ -566,8 +568,8 @@ export default function HomePage() {
               </div>
             </CardHeader>
             <Separator />
-            <CardContent className="flex-1">
-              <ScrollArea ref={eventRef} className="h-[420px] space-y-4 pr-2">
+            <CardContent className="flex-1 overflow-hidden">
+              <ScrollArea ref={eventRef} className="h-full max-h-[600px] space-y-4 pr-2">
                 <div className="space-y-4">
                   {events.map((event) => {
                     const agent = event.agentId ? agentById[event.agentId] : null;

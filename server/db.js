@@ -65,27 +65,19 @@ function initDB() {
   }
 
   // Migration: add 'testing' status to tasks CHECK constraint (for existing DBs)
+  // Uses PRAGMA writable_schema to update in-place — avoids table rename complexity
   try {
     const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get();
     if (tableInfo && !tableInfo.sql.includes("'testing'")) {
-      db.exec(`
-        ALTER TABLE tasks RENAME TO tasks_old;
-        CREATE TABLE tasks (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          description TEXT,
-          status TEXT NOT NULL CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done')),
-          assigned_agent TEXT,
-          priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')),
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL,
-          created_by TEXT,
-          tags TEXT
-        );
-        INSERT INTO tasks SELECT * FROM tasks_old;
-        DROP TABLE tasks_old;
-      `);
-      console.log('[DB] Migrated tasks table: added testing status');
+      const newSql = tableInfo.sql.replace(
+        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'done'))",
+        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done'))"
+      );
+      db.pragma('writable_schema = ON');
+      db.prepare("UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'tasks'").run(newSql);
+      db.pragma('writable_schema = OFF');
+      db.pragma('integrity_check');
+      console.log('[DB] Migrated tasks table: added testing status via writable_schema');
     }
   } catch (err) {
     console.error('[DB] Migration error (tasks status constraint):', err);

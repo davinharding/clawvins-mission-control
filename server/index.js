@@ -11,7 +11,7 @@ import authRoutes from './routes/auth.js';
 import agentTasksRoutes from './routes/agent-tasks.js';
 import { setupWebSocket } from './socket.js';
 import { SessionMonitor } from './session-monitor.js';
-import { createEvent } from './db.js';
+import { createEvent, autoArchiveDoneTasks } from './db.js';
 
 dotenv.config();
 
@@ -147,6 +147,19 @@ const watcher = spawn('node', [watcherPath], {
 });
 watcher.on('error', (err) => console.error('[Watcher] Failed to start:', err));
 
+// Auto-archive: run once on startup, then every hour
+function runAutoArchive() {
+  try {
+    const count = autoArchiveDoneTasks();
+    if (count > 0 && app.io) {
+      // Notify connected clients that tasks were archived
+      app.io.emit('tasks.auto_archived', { count });
+    }
+  } catch (err) {
+    console.error('[AutoArchive] Error:', err);
+  }
+}
+
 const startTime = new Date().toISOString();
 server.listen(port, () => {
   console.log('\n🚀 Mission Control Backend Started');
@@ -156,7 +169,14 @@ server.listen(port, () => {
   console.log(`   API: http://localhost:${port}/api`);
   console.log('   WebSocket: Ready');
   console.log('   Session Monitor: Ready');
-  console.log('   Session Watcher: Running (pure Node.js)\n');
+  console.log('   Session Watcher: Running (pure Node.js)');
+  console.log('   Auto-Archive: Enabled (24h done → archived)\n');
+
+  // Run immediately on startup
+  runAutoArchive();
+
+  // Then every hour
+  setInterval(runAutoArchive, 60 * 60 * 1000);
 });
 
 export default app;

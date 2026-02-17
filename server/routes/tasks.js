@@ -1,6 +1,8 @@
 import express from 'express';
 import {
   getAllTasks,
+  getArchivedTasks,
+  getArchivedCount,
   getTaskById,
   createTask,
   updateTask,
@@ -35,6 +37,17 @@ router.get('/', validateQuery(schemas.taskQuery), (req, res) => {
     res.json({ tasks: tasks.map(formatTask) });
   } catch (err) {
     console.error('Error fetching tasks:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/archived', (req, res) => {
+  try {
+    const tasks = getArchivedTasks();
+    const count = getArchivedCount();
+    res.json({ tasks: tasks.map(formatTask), count });
+  } catch (err) {
+    console.error('Error fetching archived tasks:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

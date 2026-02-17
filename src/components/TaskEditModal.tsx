@@ -1,6 +1,7 @@
 import * as React from "react";
 import type { Agent, Comment, Task, TaskPriority, TaskStatus } from "@/lib/api";
 import { createComment, getComments } from "@/lib/api";
+import { Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -18,9 +19,10 @@ type TaskEditModalProps = {
   onOpenChange: (open: boolean) => void;
   onSave: (taskId: string, updates: Partial<Task>) => Promise<void>;
   onDelete: (taskId: string) => Promise<void>;
+  onArchive?: (taskId: string) => void;
 };
 
-const statusOptions: TaskStatus[] = ["backlog", "todo", "in-progress", "testing", "done"];
+const statusOptions: TaskStatus[] = ["backlog", "todo", "in-progress", "testing", "done", "archived"];
 const priorityOptions: TaskPriority[] = ["low", "medium", "high", "critical"];
 
 const upsertById = <T extends { id: string }>(items: T[], item: T) => {
@@ -39,6 +41,7 @@ export function TaskEditModal({
   onOpenChange,
   onSave,
   onDelete,
+  onArchive,
 }: TaskEditModalProps) {
   const { notify } = useToast();
   const [title, setTitle] = React.useState("");
@@ -268,6 +271,21 @@ export function TaskEditModal({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
             Cancel
           </Button>
+          {onArchive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                onArchive(task.id);
+                onOpenChange(false);
+              }}
+              disabled={saving || deleting}
+              className="text-amber-400 hover:text-amber-300"
+            >
+              <Archive className="h-4 w-4 mr-1" />
+              Archive
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={handleDelete}

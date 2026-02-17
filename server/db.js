@@ -22,13 +22,14 @@ function initDB() {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT,
-      status TEXT NOT NULL CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done')),
+      status TEXT NOT NULL CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done', 'archived')),
       assigned_agent TEXT,
       priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')),
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       created_by TEXT,
-      tags TEXT
+      tags TEXT,
+      done_at INTEGER
     )
   `);
 
@@ -65,30 +66,48 @@ function initDB() {
   }
 
   // Migration: add 'testing' status to tasks CHECK constraint (for existing DBs)
+  // Uses PRAGMA writable_schema to update in-place — avoids table rename complexity
   try {
     const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get();
     if (tableInfo && !tableInfo.sql.includes("'testing'")) {
-      db.exec(`
-        ALTER TABLE tasks RENAME TO tasks_old;
-        CREATE TABLE tasks (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          description TEXT,
-          status TEXT NOT NULL CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done')),
-          assigned_agent TEXT,
-          priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')),
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL,
-          created_by TEXT,
-          tags TEXT
-        );
-        INSERT INTO tasks SELECT * FROM tasks_old;
-        DROP TABLE tasks_old;
-      `);
-      console.log('[DB] Migrated tasks table: added testing status');
+      const newSql = tableInfo.sql.replace(
+        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'done'))",
+        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done', 'archived'))"
+      );
+      db.pragma('writable_schema = ON');
+      db.prepare("UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'tasks'").run(newSql);
+      db.pragma('writable_schema = OFF');
+      db.pragma('integrity_check');
+      console.log('[DB] Migrated tasks table: added testing+archived status via writable_schema');
     }
   } catch (err) {
     console.error('[DB] Migration error (tasks status constraint):', err);
+  }
+
+  // Migration: add 'archived' status to tasks CHECK constraint (for existing DBs with testing but no archived)
+  try {
+    const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get();
+    if (tableInfo && tableInfo.sql.includes("'testing'") && !tableInfo.sql.includes("'archived'")) {
+      const newSql = tableInfo.sql.replace(
+        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done'))",
+        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done', 'archived'))"
+      );
+      db.pragma('writable_schema = ON');
+      db.prepare("UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'tasks'").run(newSql);
+      db.pragma('writable_schema = OFF');
+      db.pragma('integrity_check');
+      console.log('[DB] Migrated tasks table: added archived status via writable_schema');
+    }
+  } catch (err) {
+    console.error('[DB] Migration error (tasks archived status):', err);
+  }
+
+  // Migration: add done_at column if it doesn't exist
+  try {
+    db.prepare("ALTER TABLE tasks ADD COLUMN done_at INTEGER").run();
+    console.log('[DB] Migrated tasks table: added done_at column');
+  } catch {
+    // Column already exists — fine
   }
 
   // Comments table
@@ -121,17 +140,22 @@ initDB();
 
 // Task queries - prepared after tables exist
 const taskQueries = {
+  // Excludes archived by default
   getAll: db.prepare(`
     SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
-    FROM tasks t ORDER BY t.created_at DESC
+    FROM tasks t WHERE t.status != 'archived' ORDER BY t.created_at DESC
   `),
   getByStatus: db.prepare(`
     SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
     FROM tasks t WHERE t.status = ? ORDER BY t.created_at DESC
   `),
+  getArchived: db.prepare(`
+    SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
+    FROM tasks t WHERE t.status = 'archived' ORDER BY t.updated_at DESC
+  `),
   getByAgent: db.prepare(`
     SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
-    FROM tasks t WHERE t.assigned_agent = ? ORDER BY t.created_at DESC
+    FROM tasks t WHERE t.assigned_agent = ? AND t.status != 'archived' ORDER BY t.created_at DESC
   `),
   getById: db.prepare(`
     SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
@@ -143,10 +167,21 @@ const taskQueries = {
   `),
   update: db.prepare(`
     UPDATE tasks 
-    SET title = ?, description = ?, status = ?, assigned_agent = ?, priority = ?, updated_at = ?, tags = ?
+    SET title = ?, description = ?, status = ?, assigned_agent = ?, priority = ?, updated_at = ?, tags = ?, done_at = ?
     WHERE id = ?
   `),
   delete: db.prepare('DELETE FROM tasks WHERE id = ?'),
+  // Auto-archive: tasks in 'done' for more than 24h
+  autoArchive: db.prepare(`
+    UPDATE tasks SET status = 'archived', updated_at = ?
+    WHERE status = 'done' AND done_at IS NOT NULL AND done_at < ?
+  `),
+  // For tasks that lack done_at but have been in done for 24h based on updated_at
+  autoArchiveFallback: db.prepare(`
+    UPDATE tasks SET status = 'archived', updated_at = ?
+    WHERE status = 'done' AND done_at IS NULL AND updated_at < ?
+  `),
+  countArchived: db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE status = 'archived'`),
 };
 
 // Agent queries
@@ -196,6 +231,14 @@ export function getAllTasks(filters = {}) {
   return taskQueries.getAll.all();
 }
 
+export function getArchivedTasks() {
+  return taskQueries.getArchived.all();
+}
+
+export function getArchivedCount() {
+  return taskQueries.countArchived.get().count;
+}
+
 export function getTaskById(id) {
   return taskQueries.getById.get(id);
 }
@@ -226,15 +269,26 @@ export function updateTask(id, data) {
   if (!task) return null;
   
   const tags = JSON.stringify(data.tags || JSON.parse(task.tags || '[]'));
+  const newStatus = data.status !== undefined ? data.status : task.status;
+  
+  // Track when a task enters 'done' status
+  let doneAt = task.done_at;
+  if (newStatus === 'done' && task.status !== 'done') {
+    doneAt = Date.now();
+  } else if (newStatus !== 'done' && newStatus !== 'archived') {
+    // Leaving done/archived clears done_at
+    doneAt = null;
+  }
   
   taskQueries.update.run(
     data.title !== undefined ? data.title : task.title,
     data.description !== undefined ? data.description : task.description,
-    data.status !== undefined ? data.status : task.status,
+    newStatus,
     data.assignedAgent !== undefined ? data.assignedAgent : task.assigned_agent,
     data.priority !== undefined ? data.priority : task.priority,
     Date.now(),
     tags,
+    doneAt,
     id
   );
   
@@ -244,6 +298,24 @@ export function updateTask(id, data) {
 export function deleteTask(id) {
   const result = taskQueries.delete.run(id);
   return result.changes > 0;
+}
+
+/**
+ * Auto-archive tasks that have been in 'done' status for 24+ hours.
+ * Returns the number of tasks archived.
+ */
+export function autoArchiveDoneTasks() {
+  const now = Date.now();
+  const cutoff = now - 24 * 60 * 60 * 1000; // 24 hours ago
+
+  const r1 = taskQueries.autoArchive.run(now, cutoff);
+  const r2 = taskQueries.autoArchiveFallback.run(now, cutoff);
+  const total = r1.changes + r2.changes;
+
+  if (total > 0) {
+    console.log(`[DB] Auto-archived ${total} task(s) from done → archived`);
+  }
+  return total;
 }
 
 export function getAllAgents() {

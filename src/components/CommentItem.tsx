@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Comment } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/time";
+import { LinkifiedText } from "@/components/LinkifiedText";
 
 type CommentItemProps = {
   comment: Comment;
@@ -24,7 +25,9 @@ export function CommentItem({ comment }: CommentItemProps) {
             {formatRelativeTime(comment.createdAt)}
           </span>
         </div>
-        <p className="text-sm text-foreground/90">{comment.text}</p>
+        <p className="text-sm text-foreground/90">
+          <LinkifiedText text={comment.text} />
+        </p>
       </div>
     </div>
   );

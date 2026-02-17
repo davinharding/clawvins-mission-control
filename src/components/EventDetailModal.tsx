@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { EventItem } from "@/lib/api";
+import { LinkifiedText } from "@/components/LinkifiedText";
 
 type Props = {
   event: EventItem | null;
@@ -70,7 +71,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
                 {event.type === "message_received" ? "Message" : "Response"}
               </p>
               <p className="rounded-lg bg-muted/60 p-3 text-sm leading-relaxed whitespace-pre-wrap break-words">
-                {detail.content}
+                <LinkifiedText text={detail.content} />
               </p>
             </div>
           )}
@@ -82,7 +83,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
                 Event
               </p>
               <p className="rounded-lg bg-muted/60 p-3 text-sm leading-relaxed">
-                {event.message}
+                <LinkifiedText text={event.message} />
               </p>
             </div>
           )}

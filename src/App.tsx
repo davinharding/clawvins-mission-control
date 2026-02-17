@@ -47,6 +47,7 @@ import {
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { DraggableCard } from "@/components/DraggableCard";
 import { ArchivePanel } from "@/components/ArchivePanel";
+import { LinkifiedText } from "@/components/LinkifiedText";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -884,7 +885,7 @@ export default function HomePage() {
                                     <CardHeader className="space-y-2 p-4">
                                       <div className="flex items-start justify-between gap-3">
                                         <h3 className="text-sm font-semibold leading-snug">
-                                          {task.title}
+                                          <LinkifiedText text={task.title} />
                                         </h3>
                                         <div className="flex items-center gap-1 flex-shrink-0">
                                           {column === "done" && (
@@ -1053,7 +1054,9 @@ export default function HomePage() {
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground truncate">{event.message}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            <LinkifiedText text={event.message} />
+                          </p>
                         </div>
                         <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
                           {formatTime(event.timestamp)}

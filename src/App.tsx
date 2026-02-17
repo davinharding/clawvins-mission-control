@@ -478,8 +478,22 @@ export default function HomePage() {
   };
 
   const handleSaveTask = async (taskId: string, updates: Partial<Task>) => {
-    const response = await updateTask(taskId, updates);
-    setTasks((prev) => upsertById(prev, response.task));
+    const existing = tasks.find((t) => t.id === taskId);
+    // Optimistic update
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
+    );
+    try {
+      const response = await updateTask(taskId, updates);
+      // Confirm with server data
+      setTasks((prev) => upsertById(prev, response.task));
+    } catch (err) {
+      // Revert on failure
+      if (existing) {
+        setTasks((prev) => upsertById(prev, existing));
+      }
+      throw err; // Re-throw so modal can show error
+    }
   };
 
   const handleDeleteTask = async (taskId: string) => {

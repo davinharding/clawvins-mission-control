@@ -37,8 +37,8 @@ router.post('/', validateBody(schemas.commentCreate), (req, res) => {
 
     const comment = createComment({
       taskId: req.params.taskId,
-      authorId: req.user.id,
-      authorName: req.user.name,
+      authorId: req.body.authorId || req.user.id,
+      authorName: req.body.authorName || req.user.name,
       text: req.body.text,
     });
 

@@ -30,7 +30,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl"
+        className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -52,7 +52,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="space-y-4 px-6 py-5">
+        <div className="space-y-4 px-6 py-5 overflow-y-auto">
           {/* Channel */}
           {detail?.channelName && (
             <div>

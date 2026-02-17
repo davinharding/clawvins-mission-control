@@ -31,6 +31,18 @@ import { TaskEditModal } from "@/components/TaskEditModal";
 import { useToast } from "@/lib/toast";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { NotificationTray, type Notification } from "@/components/NotificationTray";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { KanbanColumn } from "@/components/KanbanColumn";
+import { DraggableCard } from "@/components/DraggableCard";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -184,8 +196,16 @@ export default function HomePage() {
     done: "priority-desc",
   });
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
+  const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor)
+  );
 
   const addNotification = React.useCallback(
     (n: Omit<Notification, "id" | "read" | "timestamp">) => {
@@ -385,35 +405,37 @@ export default function HomePage() {
     };
   }, [agents, tasks]);
 
-  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, taskId: string) => {
-    event.dataTransfer.setData("text/plain", taskId);
-    event.dataTransfer.effectAllowed = "move";
+  const handleDragStart = (event: DragStartEvent) => {
+    setDraggingTaskId(event.active.id as string);
   };
 
-  const handleDrop = async (event: React.DragEvent<HTMLDivElement>, status: TaskStatus) => {
-    event.preventDefault();
-    const taskId = event.dataTransfer.getData("text/plain");
-    const existing = tasks.find((task) => task.id === taskId);
-    if (!existing || existing.status === status) return;
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setDraggingTaskId(null);
+    const { active, over } = event;
+    if (!over) return;
 
+    const taskId = active.id as string;
+    const newStatus = over.id as TaskStatus;
+    const existing = tasks.find((t) => t.id === taskId);
+    if (!existing || existing.status === newStatus) return;
+
+    // Optimistic update
     setTasks((prev) =>
-      prev.map((task) => (task.id === taskId ? { ...task, status } : task))
+      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
     );
 
     try {
-      await updateTask(taskId, { status });
+      await updateTask(taskId, { status: newStatus });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update task");
+      // Revert on failure
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: existing.status } : t))
+      );
       notify({
-        title: "Failed to update task",
+        title: "Failed to move task",
         description: err instanceof Error ? err.message : "Unexpected error",
         variant: "error",
       });
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.id === taskId ? { ...task, status: existing.status } : task
-        )
-      );
     }
   };
 
@@ -633,117 +655,151 @@ export default function HomePage() {
             </div>
 
             {/* Columns Grid - flex-1 to fill remaining space, overflow hidden */}
-            <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-hidden sm:grid-cols-2 lg:grid-cols-4">
-              {columns.map((column) => {
-                const columnTasks = sortTasks(
-                  filteredTasks.filter((task) => task.status === column),
-                  columnSorts[column]
-                );
-                return (
-                  <div
-                    key={column}
-                    data-testid={`column-${column}`}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => handleDrop(event, column)}
-                    className="flex flex-col min-h-0 overflow-hidden rounded-2xl border border-dashed border-border/70 bg-card/40 p-3"
-                  >
-                    {/* Column header - fixed */}
-                    <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-2">
-                      <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        {columnLabels[column]}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          {columnTasks.length}
-                        </span>
-                        <Select
-                          aria-label={`Sort ${columnLabels[column]} tasks`}
-                          value={columnSorts[column]}
-                          onChange={(event) =>
-                            setColumnSorts((prev) => ({
-                              ...prev,
-                              [column]: event.target.value as ColumnSort,
-                            }))
-                          }
-                          className="h-7 w-[160px] rounded-lg border-border/60 bg-muted/40 px-2 text-[11px]"
-                        >
-                          {columnSortOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                    </div>
-                    {/* Task list - scrollable */}
-                    <div className="flex-1 overflow-y-auto" data-testid="task-list">
-                      <div className="space-y-3">
-                        {columnTasks.map((task) => {
-                          const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
-                          const priority = (task.priority || "low") as TaskPriority;
-                          const timestamp = task.updatedAt ?? task.createdAt;
-                          return (
-                            <Card
-                              key={task.id}
-                              draggable
-                              onDragStart={(event) => handleDragStart(event, task.id)}
-                              onClick={() => {
-                                setActiveTaskId(task.id);
-                                setModalOpen(true);
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  setActiveTaskId(task.id);
-                                  setModalOpen(true);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              className="cursor-grab active:cursor-grabbing"
+            <DndContext
+              sensors={sensors}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-hidden sm:grid-cols-2 lg:grid-cols-4">
+                {columns.map((column) => {
+                  const columnTasks = sortTasks(
+                    filteredTasks.filter((task) => task.status === column),
+                    columnSorts[column]
+                  );
+                  return (
+                    <KanbanColumn
+                      key={column}
+                      id={column}
+                      className="flex-col min-h-0 overflow-hidden"
+                    >
+                      <div data-testid={`column-${column}`} className="flex flex-col min-h-0 overflow-hidden">
+                        {/* Column header - fixed */}
+                        <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-2">
+                          <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            {columnLabels[column]}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {columnTasks.length}
+                            </span>
+                            <Select
+                              aria-label={`Sort ${columnLabels[column]} tasks`}
+                              value={columnSorts[column]}
+                              onChange={(event) =>
+                                setColumnSorts((prev) => ({
+                                  ...prev,
+                                  [column]: event.target.value as ColumnSort,
+                                }))
+                              }
+                              className="h-7 w-[160px] rounded-lg border-border/60 bg-muted/40 px-2 text-[11px]"
                             >
-                              <CardHeader className="space-y-2 p-4">
-                                <div className="flex items-start justify-between gap-3">
-                                  <h3 className="text-sm font-semibold leading-snug">
-                                    {task.title}
-                                  </h3>
-                                  <Badge
-                                    variant={priorityVariant[priority]}
-                                    className="px-2 py-0.5 text-[10px] uppercase tracking-wide"
+                              {columnSortOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+                        </div>
+                        {/* Task list - scrollable */}
+                        <div className="flex-1 overflow-y-auto" data-testid="task-list">
+                          <div className="space-y-3">
+                            {columnTasks.map((task) => {
+                              const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
+                              const priority = (task.priority || "low") as TaskPriority;
+                              const timestamp = task.updatedAt ?? task.createdAt;
+                              return (
+                                <DraggableCard key={task.id} id={task.id}>
+                                  <Card
+                                    onClick={() => {
+                                      setActiveTaskId(task.id);
+                                      setModalOpen(true);
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault();
+                                        setActiveTaskId(task.id);
+                                        setModalOpen(true);
+                                      }
+                                    }}
+                                    role="button"
+                                    tabIndex={0}
                                   >
-                                    {priority}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                  <div className="flex items-center gap-3">
-                                    <Avatar className="h-7 w-7">
-                                      <AvatarFallback>
-                                        {agent?.name
-                                          ?.split(" ")
-                                          .map((part) => part[0])
-                                          .join("")}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    <span>{agent?.name ?? "Unassigned"}</span>
-                                  </div>
-                                  <span className="font-mono">{formatTime(timestamp)}</span>
-                                </div>
-                                {(task.commentCount ?? 0) > 0 && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <span>💬</span>
-                                    <span>{task.commentCount}</span>
-                                  </div>
-                                )}
-                              </CardHeader>
-                            </Card>
-                          );
-                        })}
+                                    <CardHeader className="space-y-2 p-4">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <h3 className="text-sm font-semibold leading-snug">
+                                          {task.title}
+                                        </h3>
+                                        <Badge
+                                          variant={priorityVariant[priority]}
+                                          className="px-2 py-0.5 text-[10px] uppercase tracking-wide"
+                                        >
+                                          {priority}
+                                        </Badge>
+                                      </div>
+                                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-3">
+                                          <Avatar className="h-7 w-7">
+                                            <AvatarFallback>
+                                              {agent?.name
+                                                ?.split(" ")
+                                                .map((part) => part[0])
+                                                .join("")}
+                                            </AvatarFallback>
+                                          </Avatar>
+                                          <span>{agent?.name ?? "Unassigned"}</span>
+                                        </div>
+                                        <span className="font-mono">{formatTime(timestamp)}</span>
+                                      </div>
+                                      {(task.commentCount ?? 0) > 0 && (
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                          <span>💬</span>
+                                          <span>{task.commentCount}</span>
+                                        </div>
+                                      )}
+                                    </CardHeader>
+                                  </Card>
+                                </DraggableCard>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    </KanbanColumn>
+                  );
+                })}
+              </div>
+
+              {/* Ghost card while dragging */}
+              <DragOverlay>
+                {draggingTaskId ? (() => {
+                  const task = tasks.find((t) => t.id === draggingTaskId);
+                  const agent = task?.assignedAgent ? agentById[task.assignedAgent] : null;
+                  const priority = (task?.priority || "low") as TaskPriority;
+                  if (!task) return null;
+                  return (
+                    <Card className="rotate-2 shadow-2xl ring-2 ring-primary/60 opacity-95">
+                      <CardHeader className="space-y-2 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-semibold leading-snug">{task.title}</h3>
+                          <Badge variant={priorityVariant[priority]} className="px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                            {priority}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <Avatar className="h-7 w-7">
+                            <AvatarFallback>
+                              {agent?.name?.split(" ").map((p) => p[0]).join("") ?? "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{agent?.name ?? "Unassigned"}</span>
+                        </div>
+                      </CardHeader>
+                    </Card>
+                  );
+                })() : null}
+              </DragOverlay>
+            </DndContext>
           </section>
 
           {/* RIGHT SIDEBAR - Event Feed */}

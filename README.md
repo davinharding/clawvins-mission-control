@@ -12,6 +12,7 @@ Mission Control provides a Kanban-style interface for managing tasks across mult
 - **Activity feed** showing recent system events
 - **JWT authentication** for secure API access
 - **SQLite database** for persistent storage
+- **Agent task integration** - Agents receive notifications and can manage tasks via API/commands
 
 ## Tech Stack
 
@@ -78,6 +79,11 @@ VITE_ADMIN_USERNAME=patch
 VITE_ADMIN_PASSWORD=your-secure-password
 VITE_API_URL=/api
 VITE_SOCKET_URL=http://localhost:3002
+
+# OpenClaw Gateway (for agent notifications)
+OPENCLAW_GATEWAY_URL=http://localhost:8080
+OPENCLAW_GATEWAY_TOKEN=your-gateway-token-here
+OPENCLAW_REQUEST_TIMEOUT_MS=8000
 ```
 
 ## Running the Application
@@ -128,11 +134,18 @@ mission-control/
 │   ├── socket.js         # WebSocket event handlers
 │   ├── validation.js     # Zod schemas for input validation
 │   ├── seed.js           # Database seeding script
+│   ├── lib/              # Helper libraries
+│   │   ├── openclaw-client.js  # OpenClaw Gateway API client
+│   │   ├── message-client.js   # Discord/Telegram messaging
+│   │   └── task-command-parser.js # Parse task commands
+│   ├── webhooks/         # Webhook handlers
+│   │   └── task-assigned.js    # Task assignment notifications
 │   └── routes/
 │       ├── auth.js       # POST /api/auth/login
 │       ├── tasks.js      # CRUD for tasks
 │       ├── agents.js     # GET and PATCH agents
-│       └── events.js     # GET system events
+│       ├── events.js     # GET system events
+│       └── agent-tasks.js # Agent task API
 ├── src/
 │   ├── App.tsx           # Main React component
 │   ├── lib/
@@ -144,6 +157,8 @@ mission-control/
 │   └── mission-control.db # SQLite database (created by seed script)
 ├── docs/
 │   └── AGENT_API.md      # API documentation for agents
+├── test-agent-integration.js # Integration test script
+├── AGENT_INTEGRATION.md  # Agent integration documentation
 ├── package.json
 ├── .env                  # Environment variables (create this)
 └── README.md
@@ -192,15 +207,59 @@ All task endpoints require authentication via `Authorization: Bearer <token>` he
 
 - **GET** `/api/events?limit=<n>&since=<timestamp>` - Get recent events
 
-For detailed API documentation, see [docs/AGENT_API.md](docs/AGENT_API.md).
+### Agent Task API
+
+Agents can query and manage their tasks using simplified endpoints:
+
+- **GET** `/api/agent-tasks/mine` - Get all tasks assigned to agent
+- **GET** `/api/agent-tasks/:taskId` - Get task details
+- **PATCH** `/api/agent-tasks/:taskId/status` - Update task status
+- **POST** `/api/agent-tasks/:taskId/comment` - Add comment to task
+- **PATCH** `/api/agent-tasks/:taskId` - Full task update
+
+For detailed API documentation, see [docs/AGENT_API.md](docs/AGENT_API.md) and [AGENT_INTEGRATION.md](AGENT_INTEGRATION.md).
+
+## Agent Task Integration
+
+When a task is assigned to an agent in Mission Control, the system automatically:
+1. **Notifies the agent** via OpenClaw session or Discord/Telegram channel
+2. **Provides task details** with priority, status, and description
+3. **Suggests actions** the agent can take
+
+Agents can respond with natural language commands:
+```
+task show task-abc123       # View task details
+task start task-abc123      # Start working (→ in-progress)
+task complete task-abc123   # Mark as done
+task status task-abc123 in-progress  # Update status
+task comment task-abc123 Made progress on feature  # Add comment
+```
+
+Or use the Agent Task API endpoints directly. See [AGENT_INTEGRATION.md](AGENT_INTEGRATION.md) for complete documentation.
+
+### Testing Agent Integration
+
+Run the integration test script:
+```bash
+node test-agent-integration.js
+```
+
+This will:
+- Create a test task
+- Assign it to Patch (agent-patch)
+- Verify Discord notification is sent
+- Test all agent API endpoints
+- Update task status and add comments
+- Verify real-time WebSocket updates
 
 ## WebSocket Events
 
 The server emits real-time events when data changes:
 
 - `task.created` - New task created
-- `task.updated` - Task modified
+- `task.updated` - Task modified (including agent task updates)
 - `task.deleted` - Task removed
+- `comment.created` - Comment added to task
 - `agent.status_changed` - Agent status updated
 - `event.new` - New system event logged
 
@@ -297,6 +356,55 @@ npm install
 3. **Login** at the frontend URL with credentials from `.env`
 4. **Create/update tasks** via UI - changes are real-time across all clients
 5. **Monitor logs** in the backend terminal for request/WebSocket activity
+
+## Agent API Key Authentication
+
+Agents can update tasks autonomously using a shared API key (no JWT required).
+
+### Setup
+
+Add to `.env`:
+```
+AGENT_API_KEY=REDACTED_AGENT_KEY
+```
+
+### Usage
+
+Include `x-api-key` header with the agent key. Optionally identify the agent with `x-agent-name` and `x-agent-id`:
+
+```bash
+# Update task status to done
+curl -X PATCH http://localhost:3002/api/tasks/{taskId} \
+  -H "x-api-key: REDACTED_AGENT_KEY" \
+  -H "x-agent-name: Patch" \
+  -H "x-agent-id: agent-patch" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "done"}'
+
+# Move task to in-progress
+curl -X PATCH http://localhost:3002/api/tasks/{taskId} \
+  -H "x-api-key: REDACTED_AGENT_KEY" \
+  -H "x-agent-name: Nova" \
+  -H "x-agent-id: agent-nova" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "in-progress"}'
+
+# Create a new task
+curl -X POST http://localhost:3002/api/tasks \
+  -H "x-api-key: REDACTED_AGENT_KEY" \
+  -H "x-agent-name: Patch" \
+  -H "x-agent-id: agent-patch" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Implement feature X", "status": "todo", "priority": "high"}'
+
+# Add a comment to a task
+curl -X POST http://localhost:3002/api/tasks/{taskId}/comments \
+  -H "x-api-key: REDACTED_AGENT_KEY" \
+  -H "x-agent-name: Patch" \
+  -H "x-agent-id: agent-patch" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Working on this now. ETA 30 minutes."}'
+```
 
 ## Contributing
 

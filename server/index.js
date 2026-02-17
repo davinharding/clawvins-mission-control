@@ -3,7 +3,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import http from 'node:http';
-import { authMiddleware } from './auth.js';
+import { authMiddleware, agentKeyMiddleware } from './auth.js';
 import tasksRoutes from './routes/tasks.js';
 import agentsRoutes from './routes/agents.js';
 import eventsRoutes from './routes/events.js';
@@ -45,8 +45,21 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+// flexAuth: accept either JWT or Agent API key
+const flexAuth = (req, res, next) => {
+  const key = req.headers['x-api-key'] || req.headers['x-agent-key'];
+  if (key) {
+    return agentKeyMiddleware(req, res, (err) => {
+      if (err) return next(err);
+      if (req.user) return next();
+      return authMiddleware(req, res, next);
+    });
+  }
+  return authMiddleware(req, res, next);
+};
+
 app.use('/api/auth', authRoutes);
-app.use('/api/tasks', authMiddleware, tasksRoutes);
+app.use('/api/tasks', flexAuth, tasksRoutes);
 app.use('/api/agents', authMiddleware, agentsRoutes);
 app.use('/api/events', authMiddleware, eventsRoutes);
 app.use('/api/agent-tasks', agentTasksRoutes);

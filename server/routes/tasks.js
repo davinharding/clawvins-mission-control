@@ -9,7 +9,7 @@ import {
 } from '../db.js';
 import { schemas, validateBody, validateQuery } from '../validation.js';
 import commentsRoutes from './comments.js';
-
+import { notifyAgentOfTask } from '../webhooks/task-assigned.js';
 const router = express.Router();
 
 router.use('/:taskId/comments', commentsRoutes);
@@ -25,6 +25,7 @@ const formatTask = (task) => ({
   updatedAt: task.updated_at,
   createdBy: task.created_by,
   tags: JSON.parse(task.tags || '[]'),
+  commentCount: task.comment_count ?? 0,
 });
 
 router.get('/', validateQuery(schemas.taskQuery), (req, res) => {
@@ -117,6 +118,13 @@ router.patch('/:id', validateBody(schemas.taskUpdate), (req, res) => {
           taskId: event.taskId,
           timestamp: event.timestamp,
         },
+      });
+    }
+
+    // Notify agent if newly assigned (don't block response)
+    if (assignmentChanged && task.assigned_agent) {
+      notifyAgentOfTask(task, task.assigned_agent).catch(err => {
+        console.error('[Tasks] Failed to notify agent:', err);
       });
     }
 

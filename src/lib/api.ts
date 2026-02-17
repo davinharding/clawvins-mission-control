@@ -14,6 +14,7 @@ export type Task = {
   updatedAt: number;
   createdBy?: string | null;
   tags: string[];
+  commentCount?: number;
 };
 
 export type Agent = {

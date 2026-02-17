@@ -30,6 +30,7 @@ import { createSocket, type ConnectionState } from "@/lib/socket";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import { useToast } from "@/lib/toast";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
+import { NotificationTray, type Notification } from "@/components/NotificationTray";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -182,8 +183,24 @@ export default function HomePage() {
     "in-progress": "priority-desc",
     done: "priority-desc",
   });
+  const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
+
+  const addNotification = React.useCallback(
+    (n: Omit<Notification, "id" | "read" | "timestamp">) => {
+      setNotifications((prev) => [
+        {
+          ...n,
+          id: `notif-${Date.now()}-${Math.random()}`,
+          read: false,
+          timestamp: Date.now(),
+        },
+        ...prev,
+      ]);
+    },
+    []
+  );
 
   React.useEffect(() => {
     activeTaskIdRef.current = activeTaskId;
@@ -199,8 +216,8 @@ export default function HomePage() {
       try {
         let activeToken = getToken();
         if (!activeToken) {
-          const username = import.meta.env.VITE_ADMIN_USERNAME || "patch";
-          const password = import.meta.env.VITE_ADMIN_PASSWORD || "REDACTED";
+          const username = import.meta.env.VITE_DAVIN_USERNAME || import.meta.env.VITE_ADMIN_USERNAME || "davin";
+          const password = import.meta.env.VITE_DAVIN_PASSWORD || import.meta.env.VITE_ADMIN_PASSWORD || "REDACTED_PASSWORD";
           const response = await login(username, password);
           setToken(response.token);
           setTokenState(response.token);
@@ -249,11 +266,32 @@ export default function HomePage() {
     socket.on("task.created", (payload: TaskPayload) => {
       console.log('[WebSocket] Task created:', payload.task.id);
       setTasks((prev) => upsertById(prev, payload.task, true));
+      addNotification({
+        type: "task_created",
+        title: "New task created",
+        message: payload.task.title,
+        taskId: payload.task.id,
+      });
     });
 
     socket.on("task.updated", (payload: TaskPayload) => {
       console.log('[WebSocket] Task updated:', payload.task.id);
       setTasks((prev) => upsertById(prev, payload.task));
+      if (payload.task.status === "done") {
+        addNotification({
+          type: "task_completed",
+          title: "Task completed",
+          message: payload.task.title,
+          taskId: payload.task.id,
+        });
+      } else {
+        addNotification({
+          type: "task_moved",
+          title: "Task moved",
+          message: `"${payload.task.title}" → ${payload.task.status}`,
+          taskId: payload.task.id,
+        });
+      }
     });
 
     socket.on("task.deleted", (payload: TaskDeletedPayload) => {
@@ -282,7 +320,20 @@ export default function HomePage() {
 
     socket.on("comment.created", (payload: CommentPayload) => {
       console.log('[WebSocket] Comment created:', payload.comment.id);
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === payload.comment.taskId
+            ? { ...task, commentCount: (task.commentCount ?? 0) + 1 }
+            : task
+        )
+      );
       setIncomingComment(payload.comment);
+      addNotification({
+        type: "comment_added",
+        title: "New comment",
+        message: `${payload.comment.authorName}: ${payload.comment.text.slice(0, 60)}`,
+        taskId: payload.comment.taskId,
+      });
     });
 
     socket.on("auth_error", (payload: { error?: string }) => {
@@ -428,7 +479,26 @@ export default function HomePage() {
             <h1 className="text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
           </div>
           <div className="flex flex-col items-start gap-3 text-sm lg:items-end">
-            <ConnectionStatus state={connectionState} />
+            <div className="flex items-center gap-2">
+              <ConnectionStatus state={connectionState} />
+              <NotificationTray
+                notifications={notifications}
+                onMarkRead={(id) =>
+                  setNotifications((prev) =>
+                    prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+                  )
+                }
+                onMarkAllRead={() =>
+                  setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                }
+                onClickNotification={(n) => {
+                  if (n.taskId) {
+                    setActiveTaskId(n.taskId);
+                    setModalOpen(true);
+                  }
+                }}
+              />
+            </div>
             <div className="flex flex-wrap gap-3 text-sm">
               <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
                 <div className="text-muted-foreground">Total Tasks</div>
@@ -658,6 +728,12 @@ export default function HomePage() {
                                   </div>
                                   <span className="font-mono">{formatTime(timestamp)}</span>
                                 </div>
+                                {(task.commentCount ?? 0) > 0 && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <span>💬</span>
+                                    <span>{task.commentCount}</span>
+                                  </div>
+                                )}
                               </CardHeader>
                             </Card>
                           );

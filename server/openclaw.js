@@ -14,15 +14,17 @@ const statusPriority = {
   offline: 1,
 };
 
-const roleLabels = ['Main', 'Dev', 'Research', 'Ops'];
+const roleLabels = ['Main', 'Dev', 'Research', 'Ops', 'QA'];
 
 const normalizeRole = (value, fallback = 'Main') => {
-  if (roleLabels.includes(value)) return value;
+  // Accept any non-empty string role, don't restrict to a fixed list
+  if (value && typeof value === 'string' && value.trim()) return value.trim();
   return fallback;
 };
 
 const inferRole = (agentId, name) => {
   const text = `${agentId ?? ''} ${name ?? ''}`.toLowerCase();
+  if (text.includes('qa') || text.includes('cypress') || text.includes('test')) return 'QA';
   if (text.includes('dev') || text.includes('code') || text.includes('patch')) return 'Dev';
   if (text.includes('research') || text.includes('nova') || text.includes('content')) return 'Research';
   if (text.includes('ops') || text.includes('scout') || text.includes('stage') || text.includes('deploy')) return 'Ops';

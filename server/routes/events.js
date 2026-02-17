@@ -11,6 +11,7 @@ const formatEvent = (event) => ({
   agentId: event.agent_id,
   taskId: event.task_id,
   timestamp: event.timestamp,
+  detail: event.detail ? JSON.parse(event.detail) : null,
 });
 
 router.get('/', validateQuery(schemas.eventsQuery), (req, res) => {

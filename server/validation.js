@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const taskStatus = z.enum(['backlog', 'todo', 'in-progress', 'done']);
+const taskStatus = z.enum(['backlog', 'todo', 'in-progress', 'testing', 'done']);
 const agentRole = z.enum(['Main', 'Dev', 'Research', 'Ops']);
 const agentStatus = z.enum(['online', 'offline', 'busy']);
 const taskPriority = z.enum(['low', 'medium', 'high', 'critical']);

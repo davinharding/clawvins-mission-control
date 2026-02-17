@@ -65,12 +65,13 @@ const roles: Array<{ label: string; value: AgentRole | "All" }> = [
   { label: "Ops", value: "Ops" }
 ];
 
-const columns: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
+const columns: TaskStatus[] = ["backlog", "todo", "in-progress", "testing", "done"];
 
 const columnLabels: Record<TaskStatus, string> = {
   backlog: "Backlog",
   todo: "To Do",
   "in-progress": "In Progress",
+  testing: "Testing / QA",
   done: "Done"
 };
 
@@ -205,6 +206,7 @@ export default function HomePage() {
     backlog: "priority-desc",
     todo: "priority-desc",
     "in-progress": "priority-desc",
+    testing: "priority-desc",
     done: "priority-desc",
   });
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
@@ -315,6 +317,13 @@ export default function HomePage() {
           type: "task_completed",
           title: "Task completed",
           message: payload.task.title,
+          taskId: payload.task.id,
+        });
+      } else if (payload.task.status === "testing") {
+        addNotification({
+          type: "task_moved",
+          title: "Ready for QA",
+          message: `"${payload.task.title}" → Testing / QA`,
           taskId: payload.task.id,
         });
       } else {
@@ -687,7 +696,7 @@ export default function HomePage() {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-hidden sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-hidden sm:grid-cols-2 lg:grid-cols-5">
                 {columns.map((column) => {
                   const columnTasks = sortTasks(
                     filteredTasks.filter((task) => task.status === column),
@@ -697,13 +706,19 @@ export default function HomePage() {
                     <KanbanColumn
                       key={column}
                       id={column}
-                      className="flex-col min-h-0 overflow-hidden"
+                      className={cn(
+                        "flex-col min-h-0 overflow-hidden",
+                        column === "testing" && "border-amber-500/40 bg-amber-500/5"
+                      )}
                     >
                       <div data-testid={`column-${column}`} className="flex flex-col min-h-0 overflow-hidden">
                         {/* Column header - fixed */}
                         <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-2">
-                          <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            {columnLabels[column]}
+                          <span className={cn(
+                            "text-sm font-semibold uppercase tracking-[0.2em]",
+                            column === "testing" ? "text-amber-400" : "text-muted-foreground"
+                          )}>
+                            {column === "testing" ? "🧪 " : ""}{columnLabels[column]}
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground">

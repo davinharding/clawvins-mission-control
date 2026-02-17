@@ -83,7 +83,7 @@ router.patch('/:taskId/status', authMiddleware, (req, res) => {
       return res.status(400).json({ error: 'Status is required' });
     }
 
-    const validStatuses = ['backlog', 'todo', 'in-progress', 'done'];
+    const validStatuses = ['backlog', 'todo', 'in-progress', 'testing', 'done'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ 
         error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 

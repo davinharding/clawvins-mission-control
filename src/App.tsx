@@ -342,7 +342,7 @@ export default function HomePage() {
   );
 
   return (
-    <div className="min-h-screen">
+    <div className="flex h-screen flex-col">
       <header className="flex flex-col gap-6 border-b border-border/60 bg-card/60 px-6 py-6 backdrop-blur">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -383,7 +383,8 @@ export default function HomePage() {
         )}
       </header>
 
-      <main className="grid gap-6 px-6 py-6 lg:grid-cols-[260px_1fr_320px]">
+      <main className="flex-1 overflow-hidden">
+        <div className="grid h-full gap-6 overflow-y-auto px-6 py-6 lg:grid-cols-[260px_1fr_320px]">
         <aside className="space-y-6">
           <Card>
             <CardHeader className="space-y-3">
@@ -621,6 +622,7 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </aside>
+        </div>
       </main>
 
       <TaskEditModal

@@ -1,10 +1,30 @@
 import { createEvent } from './db.js';
 
+const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || process.env.GATEWAY_URL || 'http://localhost:8080';
+const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || process.env.GATEWAY_TOKEN || '';
+
 export class SessionMonitor {
   constructor(io) {
     this.io = io;
     this.sessionCache = new Map(); // sessionKey -> { updatedAt, messageCount, agent }
     this.pollInterval = parseInt(process.env.SESSION_POLL_INTERVAL || '10000', 10);
+    this.pollingTimer = null;
+  }
+
+  /**
+   * Start polling - NOTE: Polling disabled
+   * OpenClaw sessions API is not accessible from inside container
+   * Use cron-based push instead (agent calls sessions_list and POSTs here)
+   */
+  startPolling() {
+    console.log('[SessionMonitor] Polling not enabled (use cron-based push instead)');
+  }
+
+  /**
+   * Stop polling
+   */
+  stopPolling() {
+    console.log('[SessionMonitor] No polling to stop');
   }
 
   /**

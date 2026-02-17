@@ -127,7 +127,7 @@ export function validateCommand(command) {
   }
 
   if (command.type === 'status') {
-    const validStatuses = ['backlog', 'todo', 'in-progress', 'done'];
+    const validStatuses = ['backlog', 'todo', 'in-progress', 'testing', 'done'];
     if (!validStatuses.includes(command.status)) {
       return {
         valid: false,
@@ -154,7 +154,7 @@ Available commands:
 - \`task show <taskId>\` - Show task details
 - \`task start <taskId>\` - Start working on task (status → in-progress)
 - \`task complete <taskId>\` - Mark task as done (status → done)
-- \`task status <taskId> <status>\` - Update task status (backlog|todo|in-progress|done)
+- \`task status <taskId> <status>\` - Update task status (backlog|todo|in-progress|testing|done)
 - \`task comment <taskId> <message>\` - Add comment to task
 
 Examples:

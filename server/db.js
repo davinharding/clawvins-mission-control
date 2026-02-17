@@ -22,7 +22,7 @@ function initDB() {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT,
-      status TEXT NOT NULL CHECK(status IN ('backlog', 'todo', 'in-progress', 'done')),
+      status TEXT NOT NULL CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done')),
       assigned_agent TEXT,
       priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')),
       created_at INTEGER NOT NULL,
@@ -62,6 +62,33 @@ function initDB() {
     db.prepare("ALTER TABLE events ADD COLUMN detail TEXT").run();
   } catch {
     // Column already exists — fine
+  }
+
+  // Migration: add 'testing' status to tasks CHECK constraint (for existing DBs)
+  try {
+    const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get();
+    if (tableInfo && !tableInfo.sql.includes("'testing'")) {
+      db.exec(`
+        ALTER TABLE tasks RENAME TO tasks_old;
+        CREATE TABLE tasks (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT NOT NULL CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done')),
+          assigned_agent TEXT,
+          priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          created_by TEXT,
+          tags TEXT
+        );
+        INSERT INTO tasks SELECT * FROM tasks_old;
+        DROP TABLE tasks_old;
+      `);
+      console.log('[DB] Migrated tasks table: added testing status');
+    }
+  } catch (err) {
+    console.error('[DB] Migration error (tasks status constraint):', err);
   }
 
   // Comments table

@@ -1,4 +1,4 @@
-export type TaskStatus = 'backlog' | 'todo' | 'in-progress' | 'done';
+export type TaskStatus = 'backlog' | 'todo' | 'in-progress' | 'testing' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 export type AgentRole = 'Main' | 'Dev' | 'Research' | 'Ops';
 export type AgentStatus = 'online' | 'offline' | 'busy';

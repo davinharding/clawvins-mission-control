@@ -20,7 +20,7 @@ type TaskEditModalProps = {
   onDelete: (taskId: string) => Promise<void>;
 };
 
-const statusOptions: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
+const statusOptions: TaskStatus[] = ["backlog", "todo", "in-progress", "testing", "done"];
 const priorityOptions: TaskPriority[] = ["low", "medium", "high", "critical"];
 
 const upsertById = <T extends { id: string }>(items: T[], item: T) => {

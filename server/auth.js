@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { getAgentById } from './db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production-please';
 const JWT_EXPIRY = '7d';
@@ -46,10 +47,21 @@ function agentKeyMiddleware(req, res, next) {
   const AGENT_API_KEY = process.env.AGENT_API_KEY || 'mc-agent-key-change-me';
   const key = req.headers['x-api-key'] || req.headers['x-agent-key'];
   if (key === AGENT_API_KEY) {
-    // Identify agent from optional headers
-    const agentName = req.headers['x-agent-name'] || 'Agent';
+    // Try to look up agent by id header for accurate name/role
     const agentId = req.headers['x-agent-id'] || 'agent-unknown';
-    req.user = { id: agentId, name: agentName, role: 'Dev' };
+    const agentName = req.headers['x-agent-name'] || 'Agent';
+    let resolvedName = agentName;
+    let resolvedRole = 'Dev';
+    try {
+      const agentRecord = getAgentById(agentId);
+      if (agentRecord) {
+        resolvedName = agentRecord.name;
+        resolvedRole = agentRecord.role;
+      }
+    } catch (_) {
+      // DB lookup failed — fall back to header values
+    }
+    req.user = { id: agentId, name: resolvedName, role: resolvedRole };
     return next();
   }
   next(); // Fall through to JWT middleware

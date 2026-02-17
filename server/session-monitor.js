@@ -61,8 +61,8 @@ export class SessionMonitor {
     events.forEach(event => {
       try {
         const stored = createEvent(event);
-        this.io.emit('event:new', stored);
-        console.log(`[SessionMonitor] Event: ${event.type} - ${event.message}`);
+        this.io.emit('event.new', { event: stored });
+        console.log(`[SessionMonitor] Event: ${event.type} - ${event.message} (broadcast to ${this.io.sockets.sockets.size} clients)`);
       } catch (err) {
         console.error('[SessionMonitor] Failed to create event:', err.message);
       }

@@ -156,7 +156,7 @@ export default function HomePage() {
 
         setTasks(tasksResponse.tasks);
         setAgents(agentsResponse.agents);
-        setEvents(eventsResponse.events.slice().reverse());
+        setEvents(eventsResponse.events);
       } catch (err) {
         if (!mounted) return;
         setError(err instanceof Error ? err.message : "Failed to load mission data");
@@ -384,8 +384,8 @@ export default function HomePage() {
       </header>
 
       <main className="flex-1 overflow-hidden">
-        <div className="grid h-full gap-6 overflow-y-auto px-6 py-6 lg:grid-cols-[260px_1fr_320px]">
-        <aside className="space-y-6">
+        <div className="grid h-full gap-6 px-6 py-6 lg:grid-cols-[260px_1fr_320px]">
+        <aside className="flex h-full flex-col space-y-6 overflow-y-auto">
           <Card>
             <CardHeader className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
@@ -469,7 +469,7 @@ export default function HomePage() {
           </Card>
         </aside>
 
-        <section className="space-y-4">
+        <section className="flex h-full flex-col space-y-4 overflow-y-auto">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -556,8 +556,8 @@ export default function HomePage() {
           </div>
         </section>
 
-        <aside className="space-y-6">
-          <Card className="flex h-full flex-col">
+        <aside className="flex h-full flex-col">
+          <Card className="flex flex-1 flex-col overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -574,7 +574,7 @@ export default function HomePage() {
                     onClick={async () => {
                       try {
                         const eventsResponse = await getEvents();
-                        setEvents(eventsResponse.events.slice().reverse());
+                        setEvents(eventsResponse.events);
                       } catch (err) {
                         console.error('Failed to refresh events:', err);
                       }
@@ -590,12 +590,16 @@ export default function HomePage() {
             <CardContent className="flex-1 overflow-hidden p-4">
               <ScrollArea ref={eventRef} className="h-full pr-2">
                 <div className="space-y-4">
-                  {events.map((event) => {
+                  {events.map((event, index) => {
                     const agent = event.agentId ? agentById[event.agentId] : null;
+                    const isNew = index === 0; // First item is newest
                     return (
                       <div
                         key={event.id}
-                        className="flex gap-3 rounded-xl border border-border/60 bg-muted/30 p-3"
+                        className={cn(
+                          "flex gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 transition-all",
+                          isNew && "animate-in slide-in-from-top duration-300"
+                        )}
                       >
                         <Avatar
                           className={cn("ring-2", statusRing[agent?.status ?? "online"])}

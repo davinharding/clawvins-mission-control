@@ -91,6 +91,18 @@ const io = setupWebSocket(server, app);
 app.sessionMonitor = new SessionMonitor(io);
 console.log('Session monitor initialized');
 
+// Start session watcher (pure Node.js, no agent calls)
+import { spawn } from 'node:child_process';
+const watcherPath = new URL('../scripts/watch-sessions.js', import.meta.url).pathname;
+const watcher = spawn('node', [watcherPath], {
+  stdio: 'inherit',
+  env: {
+    ...process.env,
+    BACKEND_URL: `http://localhost:${port}/api/admin/session-sync`,
+  },
+});
+watcher.on('error', (err) => console.error('[Watcher] Failed to start:', err));
+
 const startTime = new Date().toISOString();
 server.listen(port, () => {
   console.log('\n🚀 Mission Control Backend Started');
@@ -99,10 +111,8 @@ server.listen(port, () => {
   console.log(`   Health: http://localhost:${port}/health`);
   console.log(`   API: http://localhost:${port}/api`);
   console.log('   WebSocket: Ready');
-  console.log('   Session Monitor: Ready\n');
-  
-  // Start polling OpenClaw sessions
-  app.sessionMonitor.startPolling();
+  console.log('   Session Monitor: Ready');
+  console.log('   Session Watcher: Running (pure Node.js)\n');
 });
 
 export default app;

@@ -28,7 +28,7 @@ export function ArchivePanel({ tasks, agentById, onRestore, onOpenTask, isLoadin
   const [restoringId, setRestoringId] = React.useState<string | null>(null);
   const [restoreMenuId, setRestoreMenuId] = React.useState<string | null>(null);
 
-  const { isOver, setNodeRef } = useDroppable({ id: "archived" });
+  const { isOver, setNodeRef } = useDroppable({ id: "archive-panel" });
 
   // Auto-expand when a task is dragged over the archive panel
   React.useEffect(() => {

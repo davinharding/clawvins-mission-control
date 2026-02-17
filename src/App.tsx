@@ -79,17 +79,17 @@ const columnLabels: Record<TaskStatus, string> = {
   archived: "Archived",
 };
 
-const columnEmoji: Record<TaskStatus, string> = {
-  backlog: "📋 ",
-  todo: "📌 ",
-  "in-progress": "⚡ ",
-  testing: "🧪 ",
-  done: "✅ ",
-  archived: "",
+const columnEmojis: Record<TaskStatus, string> = {
+  backlog: "📋",
+  todo: "🎯",
+  "in-progress": "⚡",
+  testing: "🧪",
+  done: "✅",
+  archived: "🗄️",
 };
 
-const columnTextColor: Record<TaskStatus, string> = {
-  backlog: "text-slate-400",
+const columnColors: Record<TaskStatus, string> = {
+  backlog: "text-muted-foreground",
   todo: "text-sky-400",
   "in-progress": "text-violet-400",
   testing: "text-amber-400",
@@ -97,14 +97,16 @@ const columnTextColor: Record<TaskStatus, string> = {
   archived: "text-muted-foreground",
 };
 
-const columnBorderBg: Record<TaskStatus, string> = {
+const columnBg: Record<TaskStatus, string> = {
   backlog: "",
   todo: "border-sky-500/20 bg-sky-500/5",
-  "in-progress": "border-violet-500/30 bg-violet-500/5",
+  "in-progress": "border-violet-500/20 bg-violet-500/5",
   testing: "border-amber-500/40 bg-amber-500/5",
-  done: "border-emerald-500/30 bg-emerald-500/5",
+  done: "border-emerald-500/20 bg-emerald-500/5",
   archived: "",
 };
+
+const ARCHIVE_DROP_ID = "archive-panel";
 
 const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
   low: "outline",
@@ -503,7 +505,7 @@ export default function HomePage() {
     if (!existing || existing.status === newStatus) return;
 
     // Handle archive drop target
-    if (newStatus === "archived") {
+    if (over.id === ARCHIVE_DROP_ID) {
       await handleArchiveTask(taskId);
       return;
     }
@@ -820,18 +822,18 @@ export default function HomePage() {
                       id={column}
                       className={cn(
                         "flex-col min-h-0 overflow-hidden",
-                        columnBorderBg[column]
+                        columnBg[column]
                       )}
                     >
                       <div data-testid={`column-${column}`} className="flex flex-col min-h-0 overflow-hidden">
                         {/* Column header - title row + sort row stacked */}
-                        <div className="mb-3 flex-shrink-0">
-                          <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <div className="mb-3 flex-shrink-0 space-y-1.5">
+                          <div className="flex items-center justify-between">
                             <span className={cn(
-                              "text-xs font-bold uppercase tracking-[0.18em]",
-                              columnTextColor[column]
+                              "text-sm font-semibold uppercase tracking-[0.2em]",
+                              columnColors[column]
                             )}>
-                              {columnEmoji[column]}{columnLabels[column]}
+                              {columnEmojis[column]} {columnLabels[column]}
                             </span>
                             <span className="text-xs font-mono text-muted-foreground">
                               {columnTasks.length}

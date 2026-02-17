@@ -41,4 +41,18 @@ function authMiddleware(req, res, next) {
   next();
 }
 
-export { generateToken, verifyToken, authMiddleware };
+function agentKeyMiddleware(req, res, next) {
+  // Read lazily so dotenv.config() has already run
+  const AGENT_API_KEY = process.env.AGENT_API_KEY || 'mc-agent-key-change-me';
+  const key = req.headers['x-api-key'] || req.headers['x-agent-key'];
+  if (key === AGENT_API_KEY) {
+    // Identify agent from optional headers
+    const agentName = req.headers['x-agent-name'] || 'Agent';
+    const agentId = req.headers['x-agent-id'] || 'agent-unknown';
+    req.user = { id: agentId, name: agentName, role: 'Dev' };
+    return next();
+  }
+  next(); // Fall through to JWT middleware
+}
+
+export { generateToken, verifyToken, authMiddleware, agentKeyMiddleware };

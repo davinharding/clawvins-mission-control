@@ -86,10 +86,22 @@ initDB();
 
 // Task queries - prepared after tables exist
 const taskQueries = {
-  getAll: db.prepare('SELECT * FROM tasks ORDER BY created_at DESC'),
-  getByStatus: db.prepare('SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC'),
-  getByAgent: db.prepare('SELECT * FROM tasks WHERE assigned_agent = ? ORDER BY created_at DESC'),
-  getById: db.prepare('SELECT * FROM tasks WHERE id = ?'),
+  getAll: db.prepare(`
+    SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
+    FROM tasks t ORDER BY t.created_at DESC
+  `),
+  getByStatus: db.prepare(`
+    SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
+    FROM tasks t WHERE t.status = ? ORDER BY t.created_at DESC
+  `),
+  getByAgent: db.prepare(`
+    SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
+    FROM tasks t WHERE t.assigned_agent = ? ORDER BY t.created_at DESC
+  `),
+  getById: db.prepare(`
+    SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
+    FROM tasks t WHERE t.id = ?
+  `),
   create: db.prepare(`
     INSERT INTO tasks (id, title, description, status, assigned_agent, priority, created_at, updated_at, created_by, tags)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -8,6 +8,7 @@ import tasksRoutes from './routes/tasks.js';
 import agentsRoutes from './routes/agents.js';
 import eventsRoutes from './routes/events.js';
 import authRoutes from './routes/auth.js';
+import agentTasksRoutes from './routes/agent-tasks.js';
 import { setupWebSocket } from './socket.js';
 import { SessionMonitor } from './session-monitor.js';
 
@@ -48,6 +49,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tasks', authMiddleware, tasksRoutes);
 app.use('/api/agents', authMiddleware, agentsRoutes);
 app.use('/api/events', authMiddleware, eventsRoutes);
+app.use('/api/agent-tasks', agentTasksRoutes);
 
 // Admin endpoint for session sync (called by agent cron)
 app.post('/api/admin/session-sync', express.json(), (req, res) => {

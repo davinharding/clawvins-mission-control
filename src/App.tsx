@@ -565,7 +565,24 @@ export default function HomePage() {
                   </p>
                   <h3 className="text-lg font-semibold">Agent Events</h3>
                 </div>
-                <Badge variant="outline">Realtime</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Realtime</Badge>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      try {
+                        const eventsResponse = await getEvents();
+                        setEvents(eventsResponse.events.slice().reverse());
+                      } catch (err) {
+                        console.error('Failed to refresh events:', err);
+                      }
+                    }}
+                    className="h-7 px-2"
+                  >
+                    ↻
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <Separator />

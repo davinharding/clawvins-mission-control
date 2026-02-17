@@ -33,10 +33,12 @@ export class SessionMonitor {
    */
   processSessions(sessions) {
     if (!Array.isArray(sessions)) {
-      console.warn('SessionMonitor: Invalid sessions data');
+      console.warn('[SessionMonitor] Invalid sessions data');
       return;
     }
 
+    console.log(`[SessionMonitor] Processing ${sessions.length} sessions`);
+    
     const events = [];
     const currentKeys = new Set();
 
@@ -78,16 +80,20 @@ export class SessionMonitor {
     });
 
     // Store and broadcast events
+    console.log(`[SessionMonitor] Generated ${events.length} events`);
+    
     events.forEach(event => {
       try {
         const stored = createEvent(event);
+        const connectedClients = this.io.sockets.sockets.size;
+        console.log(`[SessionMonitor] Broadcasting event: ${event.type} - "${event.message}" to ${connectedClients} client(s)`);
         this.io.emit('event.new', { event: stored });
-        console.log(`[SessionMonitor] Event: ${event.type} - ${event.message} (broadcast to ${this.io.sockets.sockets.size} clients)`);
       } catch (err) {
         console.error('[SessionMonitor] Failed to create event:', err.message);
       }
     });
 
+    console.log(`[SessionMonitor] Completed processing. Cache size: ${this.sessionCache.size}`);
     return events.length;
   }
 

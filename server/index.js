@@ -1,7 +1,9 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 import http from 'node:http';
 import { authMiddleware, agentKeyMiddleware } from './auth.js';
 import tasksRoutes from './routes/tasks.js';
@@ -11,9 +13,8 @@ import authRoutes from './routes/auth.js';
 import agentTasksRoutes from './routes/agent-tasks.js';
 import { setupWebSocket } from './socket.js';
 import { SessionMonitor } from './session-monitor.js';
-import { createEvent, autoArchiveDoneTasks } from './db.js';
-
-dotenv.config();
+import { createEvent, autoArchiveDoneTasks, createAgent, getAgentById, db } from './db.js';
+import { getAgentsFromSessions } from './openclaw.js';
 
 const app = express();
 
@@ -64,6 +65,48 @@ app.use('/api/tasks', flexAuth, tasksRoutes);
 app.use('/api/agents', authMiddleware, agentsRoutes);
 app.use('/api/events', authMiddleware, eventsRoutes);
 app.use('/api/agent-tasks', agentTasksRoutes);
+
+// Agent sync from OpenClaw sessions
+async function syncAgentsFromOpenClaw() {
+  try {
+    const agents = await getAgentsFromSessions();
+    let synced = 0;
+    for (const agent of agents) {
+      const existing = db.prepare('SELECT id FROM agents WHERE id = ?').get(agent.id);
+      if (!existing) {
+        createAgent(agent);
+        synced++;
+        console.log(`[AgentSync] Added new agent: ${agent.name} (${agent.id})`);
+      } else {
+        // Update status/last_active
+        db.prepare('UPDATE agents SET status = ?, last_active = ? WHERE id = ?')
+          .run(agent.status, Date.now(), agent.id);
+      }
+    }
+    if (synced > 0) console.log(`[AgentSync] Synced ${synced} new agents from OpenClaw`);
+  } catch (err) {
+    console.warn('[AgentSync] Could not sync agents from OpenClaw:', err.message);
+  }
+}
+
+// Admin endpoint for agent sync (manual trigger)
+app.post('/api/admin/sync-agents', express.json(), async (req, res) => {
+  try {
+    const adminSecret = process.env.ADMIN_SECRET || 'REDACTED_SECRET';
+
+    const headerSecret = req.headers['x-admin-secret'];
+    const bodySecret = req.body?.secret;
+    if (headerSecret !== adminSecret && bodySecret !== adminSecret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    await syncAgentsFromOpenClaw();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Admin] sync-agents error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Admin endpoint for session sync (called by watch-sessions.js)
 app.post('/api/admin/session-sync', express.json(), (req, res) => {
@@ -177,6 +220,10 @@ server.listen(port, () => {
 
   // Then every hour
   setInterval(runAutoArchive, 60 * 60 * 1000);
+
+  // Sync agents from OpenClaw on startup, then every 5 minutes
+  syncAgentsFromOpenClaw();
+  setInterval(syncAgentsFromOpenClaw, 5 * 60 * 1000);
 });
 
 export default app;

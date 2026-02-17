@@ -38,12 +38,45 @@ function initDB() {
     CREATE TABLE IF NOT EXISTS agents (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('Main', 'Dev', 'Research', 'Ops')),
+      role TEXT NOT NULL DEFAULT 'Main',
       status TEXT NOT NULL CHECK(status IN ('online', 'offline', 'busy')),
       last_active INTEGER NOT NULL,
       avatar_color TEXT
     )
   `);
+
+  // Migration: remove restrictive role CHECK constraint if present (temp-table swap)
+  try {
+    const agentsInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='agents'").get();
+    if (agentsInfo && agentsInfo.sql.includes("CHECK(role IN")) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS agents_migration_tmp (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'Main',
+          status TEXT NOT NULL CHECK(status IN ('online', 'offline', 'busy')),
+          last_active INTEGER NOT NULL,
+          avatar_color TEXT
+        );
+        INSERT OR IGNORE INTO agents_migration_tmp (id, name, role, status, last_active, avatar_color)
+          SELECT id, name, role, status, last_active, avatar_color FROM agents;
+        DROP TABLE agents;
+        CREATE TABLE agents (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'Main',
+          status TEXT NOT NULL CHECK(status IN ('online', 'offline', 'busy')),
+          last_active INTEGER NOT NULL,
+          avatar_color TEXT
+        );
+        INSERT INTO agents SELECT * FROM agents_migration_tmp;
+        DROP TABLE agents_migration_tmp;
+      `);
+      console.log('[DB] Migrated agents table: removed restrictive role CHECK constraint');
+    }
+  } catch (err) {
+    console.error('[DB] Migration error (agents role constraint):', err.message);
+  }
 
   // Events table
   db.exec(`

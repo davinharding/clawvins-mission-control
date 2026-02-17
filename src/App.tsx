@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Archive } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
   getAgents,
   getEvents,
   getTasks,
+  getArchivedTasks,
   getToken,
   login,
   setToken,
@@ -44,6 +46,7 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { DraggableCard } from "@/components/DraggableCard";
+import { ArchivePanel } from "@/components/ArchivePanel";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -72,7 +75,8 @@ const columnLabels: Record<TaskStatus, string> = {
   todo: "To Do",
   "in-progress": "In Progress",
   testing: "Testing / QA",
-  done: "Done"
+  done: "Done",
+  archived: "Archived",
 };
 
 const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
@@ -208,10 +212,12 @@ export default function HomePage() {
     "in-progress": "priority-desc",
     testing: "priority-desc",
     done: "priority-desc",
+    archived: "priority-desc",
   });
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = React.useState<EventItem | null>(null);
+  const [archivedTasks, setArchivedTasks] = React.useState<Task[]>([]);
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
 
@@ -261,10 +267,11 @@ export default function HomePage() {
           setTokenState(activeToken);
         }
 
-        const [tasksResponse, agentsResponse, eventsResponse] = await Promise.all([
+        const [tasksResponse, agentsResponse, eventsResponse, archivedResponse] = await Promise.all([
           getTasks(),
           getAgents(),
-          getEvents()
+          getEvents(),
+          getArchivedTasks(),
         ]);
 
         if (!mounted) return;
@@ -272,6 +279,7 @@ export default function HomePage() {
         setTasks(tasksResponse.tasks);
         setAgents(agentsResponse.agents);
         setEvents(mergeEvents([], eventsResponse.events));
+        setArchivedTasks(archivedResponse.tasks);
       } catch (err) {
         if (!mounted) return;
         setError(err instanceof Error ? err.message : "Failed to load mission data");
@@ -311,6 +319,14 @@ export default function HomePage() {
 
     socket.on("task.updated", (payload: TaskPayload) => {
       console.log('[WebSocket] Task updated:', payload.task.id);
+      if (payload.task.status === "archived") {
+        // Move from board to archive
+        setTasks((prev) => prev.filter((t) => t.id !== payload.task.id));
+        setArchivedTasks((prev) => upsertById(prev, payload.task, true));
+        return;
+      }
+      // If a task comes back from archive to any board status
+      setArchivedTasks((prev) => prev.filter((t) => t.id !== payload.task.id));
       setTasks((prev) => upsertById(prev, payload.task));
       if (payload.task.status === "done") {
         addNotification({
@@ -378,6 +394,22 @@ export default function HomePage() {
       });
     });
 
+    socket.on("tasks.auto_archived", (payload: { count: number }) => {
+      console.log('[WebSocket] Auto-archived:', payload.count, 'tasks');
+      // Refresh both board tasks and archive
+      Promise.all([getTasks(), getArchivedTasks()]).then(([tasksRes, archiveRes]) => {
+        setTasks(tasksRes.tasks);
+        setArchivedTasks(archiveRes.tasks);
+        if (payload.count > 0) {
+          addNotification({
+            type: "task_moved",
+            title: "Auto-archived",
+            message: `${payload.count} task${payload.count > 1 ? 's' : ''} moved to archive`,
+          });
+        }
+      }).catch(() => {});
+    });
+
     socket.on("auth_error", (payload: { error?: string }) => {
       console.error('[WebSocket] Auth error:', payload?.error);
       setError(payload?.error || "Socket authentication failed");
@@ -397,8 +429,10 @@ export default function HomePage() {
   }, [agents, selectedRole]);
 
   const filteredTasks = React.useMemo(() => {
-    if (!selectedAgentId) return tasks;
-    return tasks.filter((task) => task.assignedAgent === selectedAgentId);
+    // Archived tasks never appear on the main board
+    const boardTasks = tasks.filter((task) => task.status !== "archived");
+    if (!selectedAgentId) return boardTasks;
+    return boardTasks.filter((task) => task.assignedAgent === selectedAgentId);
   }, [tasks, selectedAgentId]);
 
   const stats = React.useMemo(() => {
@@ -440,6 +474,12 @@ export default function HomePage() {
     const newStatus = over.id as TaskStatus;
     const existing = tasks.find((t) => t.id === taskId);
     if (!existing || existing.status === newStatus) return;
+
+    // Handle archive drop target
+    if (newStatus === "archived") {
+      await handleArchiveTask(taskId);
+      return;
+    }
 
     // Optimistic update
     setTasks((prev) =>
@@ -511,7 +551,51 @@ export default function HomePage() {
       throw new Error("Task could not be deleted");
     }
     setTasks((prev) => prev.filter((task) => task.id !== taskId));
+    setArchivedTasks((prev) => prev.filter((task) => task.id !== taskId));
     setActiveTaskId(null);
+  };
+
+  const handleArchiveTask = async (taskId: string) => {
+    const existing = tasks.find((t) => t.id === taskId);
+    if (!existing) return;
+    // Optimistic: remove from board
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    try {
+      const response = await updateTask(taskId, { status: "archived" });
+      setArchivedTasks((prev) => upsertById(prev, response.task, true));
+    } catch (err) {
+      // Revert
+      setTasks((prev) => [existing, ...prev]);
+      notify({
+        title: "Failed to archive task",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
+    }
+  };
+
+  const handleRestoreTask = async (taskId: string, status: TaskStatus) => {
+    const existing = archivedTasks.find((t) => t.id === taskId);
+    if (!existing) return;
+    // Optimistic: remove from archive
+    setArchivedTasks((prev) => prev.filter((t) => t.id !== taskId));
+    try {
+      const response = await updateTask(taskId, { status });
+      setTasks((prev) => upsertById(prev, response.task, true));
+      notify({
+        title: "Task restored",
+        description: `"${response.task.title}" moved to ${status}`,
+        variant: "default",
+      });
+    } catch (err) {
+      // Revert
+      setArchivedTasks((prev) => [existing, ...prev]);
+      notify({
+        title: "Failed to restore task",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
+    }
   };
 
   const agentById = React.useMemo(() => {
@@ -587,8 +671,8 @@ export default function HomePage() {
         )}
       </header>
 
-      <main className="flex-1 overflow-hidden">
-        <div className="grid h-full grid-rows-1 grid-cols-1 gap-6 px-6 py-6 md:grid-cols-[1fr_300px] lg:grid-cols-[240px_1fr_360px]">
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-6 px-6 py-6 md:grid-cols-[1fr_300px] lg:grid-cols-[240px_1fr_360px]">
           {/* LEFT SIDEBAR - Agent Filters + Status Legend */}
           <aside className="flex h-full min-h-0 flex-col gap-6 md:hidden lg:flex">
             {/* Agent Filters Card - flex-1 to take available space, overflow hidden */}
@@ -690,6 +774,7 @@ export default function HomePage() {
               </Button>
             </div>
 
+
             {/* Columns Grid - flex-1 to fill remaining space, overflow hidden */}
             <DndContext
               sensors={sensors}
@@ -772,12 +857,27 @@ export default function HomePage() {
                                         <h3 className="text-sm font-semibold leading-snug">
                                           {task.title}
                                         </h3>
-                                        <Badge
-                                          variant={priorityVariant[priority]}
-                                          className="px-2 py-0.5 text-[10px] uppercase tracking-wide"
-                                        >
-                                          {priority}
-                                        </Badge>
+                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                          {column === "done" && (
+                                            <button
+                                              type="button"
+                                              title="Archive task"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleArchiveTask(task.id);
+                                              }}
+                                              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-all"
+                                            >
+                                              <Archive className="h-3 w-3" />
+                                            </button>
+                                          )}
+                                          <Badge
+                                            variant={priorityVariant[priority]}
+                                            className="px-2 py-0.5 text-[10px] uppercase tracking-wide"
+                                          >
+                                            {priority}
+                                          </Badge>
+                                        </div>
                                       </div>
                                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                                         <div className="flex items-center gap-3">
@@ -842,6 +942,20 @@ export default function HomePage() {
                 })() : null}
               </DragOverlay>
             </DndContext>
+
+            {/* Archive Panel - collapsed by default, below the board */}
+            <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
+              <ArchivePanel
+                tasks={archivedTasks}
+                agentById={agentById}
+                onRestore={handleRestoreTask}
+                onOpenTask={(taskId) => {
+                  setActiveTaskId(taskId);
+                  setModalOpen(true);
+                }}
+                isLoading={loading}
+              />
+            </div>
           </section>
 
           {/* RIGHT SIDEBAR - Event Feed */}
@@ -923,6 +1037,7 @@ export default function HomePage() {
             </div>
           </aside>
         </div>
+
       </main>
 
       <TaskEditModal
@@ -936,6 +1051,7 @@ export default function HomePage() {
         }}
         onSave={handleSaveTask}
         onDelete={handleDeleteTask}
+        onArchive={handleArchiveTask}
       />
 
       <EventDetailModal

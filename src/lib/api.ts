@@ -1,4 +1,4 @@
-export type TaskStatus = 'backlog' | 'todo' | 'in-progress' | 'testing' | 'done';
+export type TaskStatus = 'backlog' | 'todo' | 'in-progress' | 'testing' | 'done' | 'archived';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 export type AgentRole = 'Main' | 'Dev' | 'Research' | 'Ops';
 export type AgentStatus = 'online' | 'offline' | 'busy';
@@ -129,6 +129,20 @@ export async function deleteTask(id: string) {
     method: 'DELETE',
     headers: authHeaders(),
   });
+}
+
+export async function getArchivedTasks() {
+  return request<{ tasks: Task[]; count: number }>('/tasks/archived', {
+    headers: authHeaders(),
+  });
+}
+
+export async function archiveTask(id: string) {
+  return updateTask(id, { status: 'archived' });
+}
+
+export async function restoreTask(id: string, status: TaskStatus = 'backlog') {
+  return updateTask(id, { status });
 }
 
 export async function getAgents() {

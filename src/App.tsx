@@ -152,6 +152,39 @@ const statusRing: Record<Agent["status"], string> = {
   offline: "ring-slate-500/40"
 };
 
+// Emoji avatars — keyed by agent name (first word, case-insensitive)
+const agentEmojiMap: Record<string, string> = {
+  clawvin: "🐾",
+  patch:   "🔧",
+  scout:   "🎯",
+  vitals:  "💪",
+  alpha:   "🔍",
+  iris:    "📨",
+  nova:    "✨",
+  ledger:  "📒",
+  atlas:   "🏋️",
+};
+
+// Category-based avatar background colors
+const roleAvatarBg: Record<AgentRole, string> = {
+  Main:     "bg-blue-500/20",
+  Dev:      "bg-amber-500/20",
+  Research: "bg-purple-500/20",
+  Ops:      "bg-emerald-500/20",
+};
+
+const roleAvatarText: Record<AgentRole, string> = {
+  Main:     "text-blue-300",
+  Dev:      "text-amber-300",
+  Research: "text-purple-300",
+  Ops:      "text-emerald-300",
+};
+
+const getAgentEmoji = (name: string): string | null => {
+  const key = name.split(" ")[0].toLowerCase();
+  return agentEmojiMap[key] ?? null;
+};
+
 const formatTime = (value: number) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -756,14 +789,20 @@ export default function HomePage() {
                           : "border-border/70 hover:bg-muted/60"
                       )}
                     >
-                      <Avatar className={cn("ring-2", statusRing[agent.status])}>
-                        <AvatarFallback>
-                          {agent.name
-                            .split(" ")
-                            .map((part) => part[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
+                      {(() => {
+                        const emoji = getAgentEmoji(agent.name);
+                        return (
+                          <Avatar className={cn(
+                            "ring-2",
+                            statusRing[agent.status],
+                            roleAvatarBg[agent.role]
+                          )}>
+                            <AvatarFallback className={emoji ? "text-base" : roleAvatarText[agent.role]}>
+                              {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                        );
+                      })()}
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-semibold">{agent.name}</span>
@@ -929,14 +968,20 @@ export default function HomePage() {
                                       </div>
                                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                                         <div className="flex items-center gap-3">
-                                          <Avatar className="h-7 w-7">
-                                            <AvatarFallback>
-                                              {agent?.name
-                                                ?.split(" ")
-                                                .map((part) => part[0])
-                                                .join("")}
-                                            </AvatarFallback>
-                                          </Avatar>
+                                          {agent ? (() => {
+                                            const emoji = getAgentEmoji(agent.name);
+                                            return (
+                                              <Avatar className={cn("h-7 w-7", roleAvatarBg[agent.role])}>
+                                                <AvatarFallback className={cn("text-[10px]", emoji ? "text-base leading-none" : roleAvatarText[agent.role])}>
+                                                  {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
+                                                </AvatarFallback>
+                                              </Avatar>
+                                            );
+                                          })() : (
+                                            <Avatar className="h-7 w-7">
+                                              <AvatarFallback className="text-[10px]">?</AvatarFallback>
+                                            </Avatar>
+                                          )}
                                           <span>{agent?.name ?? "Unassigned"}</span>
                                         </div>
                                         <span className="font-mono">{formatTime(timestamp)}</span>
@@ -977,11 +1022,20 @@ export default function HomePage() {
                           </Badge>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <Avatar className="h-7 w-7">
-                            <AvatarFallback>
-                              {agent?.name?.split(" ").map((p) => p[0]).join("") ?? "?"}
-                            </AvatarFallback>
-                          </Avatar>
+                          {agent ? (() => {
+                            const emoji = getAgentEmoji(agent.name);
+                            return (
+                              <Avatar className={cn("h-7 w-7", roleAvatarBg[agent.role])}>
+                                <AvatarFallback className={cn("text-[10px]", emoji ? "text-base leading-none" : roleAvatarText[agent.role])}>
+                                  {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
+                                </AvatarFallback>
+                              </Avatar>
+                            );
+                          })() : (
+                            <Avatar className="h-7 w-7">
+                              <AvatarFallback className="text-[10px]">?</AvatarFallback>
+                            </Avatar>
+                          )}
                           <span>{agent?.name ?? "Unassigned"}</span>
                         </div>
                       </CardHeader>

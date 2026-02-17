@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3002';
+// Connect to same origin (port 9000) which proxies to backend (port 3002)
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 export type ConnectionState = 'connected' | 'disconnected' | 'reconnecting';
 

@@ -14,15 +14,29 @@ dotenv.config();
 
 const app = express();
 
+const allowedOrigins = new Set(
+  [
+    process.env.FRONTEND_URL,
+    'http://localhost:9000',
+    'http://localhost:3001',
+  ].filter(Boolean)
+);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
+  credentials: true,
+};
+
 // HTTP request logging
 app.use(morgan('dev'));
 
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:9000',
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.get('/health', (req, res) => {

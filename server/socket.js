@@ -2,9 +2,23 @@ import { Server } from 'socket.io';
 import { verifyToken } from './auth.js';
 
 export function setupWebSocket(server, app) {
+  const allowedOrigins = new Set(
+    [
+      process.env.FRONTEND_URL,
+      'http://localhost:9000',
+      'http://localhost:3001',
+    ].filter(Boolean)
+  );
+
   const io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:9000',
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.has(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      },
       credentials: true,
     },
   });

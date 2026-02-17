@@ -80,6 +80,7 @@ router.post('/', validateBody(schemas.taskCreate), (req, res) => {
 
 router.patch('/:id', validateBody(schemas.taskUpdate), (req, res) => {
   try {
+    const oldTask = getTaskById(req.params.id);
     const task = updateTask(req.params.id, {
       title: req.body.title,
       description: req.body.description,
@@ -93,10 +94,15 @@ router.patch('/:id', validateBody(schemas.taskUpdate), (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
+    // Check if agent assignment changed
+    const assignmentChanged = oldTask && oldTask.assigned_agent !== task.assigned_agent;
+    
     const event = createEvent({
-      type: 'task_updated',
-      message: `${req.user.name} updated task: ${task.title}`,
-      agentId: req.user.id,
+      type: assignmentChanged ? 'task_assigned' : 'task_updated',
+      message: assignmentChanged 
+        ? `${task.title} assigned to ${task.assigned_agent || 'unassigned'}`
+        : `${req.user.name} updated task: ${task.title}`,
+      agentId: task.assigned_agent || req.user.id,
       taskId: task.id,
     });
 

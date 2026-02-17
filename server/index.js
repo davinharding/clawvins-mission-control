@@ -100,6 +100,9 @@ server.listen(port, () => {
   console.log(`   API: http://localhost:${port}/api`);
   console.log('   WebSocket: Ready');
   console.log('   Session Monitor: Ready\n');
+  
+  // Start polling OpenClaw sessions
+  app.sessionMonitor.startPolling();
 });
 
 export default app;

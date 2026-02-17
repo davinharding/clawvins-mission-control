@@ -38,7 +38,7 @@ export function NotificationTray({
       >
         🔔
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
+          <span className="absolute -right-1.5 -top-1.5 flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white leading-none">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}

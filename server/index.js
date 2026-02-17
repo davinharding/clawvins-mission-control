@@ -9,6 +9,7 @@ import agentsRoutes from './routes/agents.js';
 import eventsRoutes from './routes/events.js';
 import authRoutes from './routes/auth.js';
 import { setupWebSocket } from './socket.js';
+import { SessionMonitor } from './session-monitor.js';
 
 dotenv.config();
 
@@ -48,6 +49,33 @@ app.use('/api/tasks', authMiddleware, tasksRoutes);
 app.use('/api/agents', authMiddleware, agentsRoutes);
 app.use('/api/events', authMiddleware, eventsRoutes);
 
+// Admin endpoint for session sync (called by agent cron)
+app.post('/api/admin/session-sync', express.json(), (req, res) => {
+  try {
+    const { sessions, secret } = req.body;
+    
+    // Simple secret-based auth (environment variable)
+    const expectedSecret = process.env.ADMIN_SECRET || 'change-me-in-production';
+    if (secret !== expectedSecret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    if (!app.sessionMonitor) {
+      return res.status(503).json({ error: 'Session monitor not initialized' });
+    }
+    
+    const eventCount = app.sessionMonitor.processSessions(sessions || []);
+    res.json({ 
+      success: true, 
+      eventsGenerated: eventCount,
+      stats: app.sessionMonitor.getStats()
+    });
+  } catch (err) {
+    console.error('[Admin] Session sync error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err);
   console.error('Stack trace:', err.stack);
@@ -57,7 +85,11 @@ app.use((err, req, res, next) => {
 const port = process.env.PORT || 3002;
 const server = http.createServer(app);
 
-setupWebSocket(server, app);
+const io = setupWebSocket(server, app);
+
+// Initialize session monitor
+app.sessionMonitor = new SessionMonitor(io);
+console.log('Session monitor initialized');
 
 const startTime = new Date().toISOString();
 server.listen(port, () => {
@@ -66,7 +98,8 @@ server.listen(port, () => {
   console.log(`   Port: ${port}`);
   console.log(`   Health: http://localhost:${port}/health`);
   console.log(`   API: http://localhost:${port}/api`);
-  console.log('   WebSocket: Ready\n');
+  console.log('   WebSocket: Ready');
+  console.log('   Session Monitor: Ready\n');
 });
 
 export default app;

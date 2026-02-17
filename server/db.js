@@ -52,9 +52,17 @@ function initDB() {
       message TEXT NOT NULL,
       agent_id TEXT,
       task_id TEXT,
-      timestamp INTEGER NOT NULL
+      timestamp INTEGER NOT NULL,
+      detail TEXT
     )
   `);
+
+  // Migration: add detail column if it doesn't exist (for existing DBs)
+  try {
+    db.prepare("ALTER TABLE events ADD COLUMN detail TEXT").run();
+  } catch {
+    // Column already exists — fine
+  }
 
   // Comments table
   db.exec(`
@@ -134,9 +142,10 @@ const agentQueries = {
 const eventQueries = {
   getRecent: db.prepare('SELECT * FROM events ORDER BY timestamp DESC LIMIT ?'),
   getSince: db.prepare('SELECT * FROM events WHERE timestamp > ? ORDER BY timestamp DESC'),
+  getById: db.prepare('SELECT * FROM events WHERE id = ?'),
   create: db.prepare(`
-    INSERT INTO events (id, type, message, agent_id, task_id, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO events (id, type, message, agent_id, task_id, timestamp, detail)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `),
 };
 
@@ -263,20 +272,25 @@ export function getEventsSince(timestamp) {
   return eventQueries.getSince.all(timestamp);
 }
 
+export function getEventById(id) {
+  return eventQueries.getById.get(id);
+}
+
 export function createEvent(data) {
-  const id = `evt-${randomUUID()}`;
-  const now = Date.now();
-  
+  const id = data.id || `evt-${randomUUID()}`;
+  const now = data.timestamp || Date.now();
+
   eventQueries.create.run(
     id,
     data.type,
     data.message,
     data.agentId || null,
     data.taskId || null,
-    now
+    now,
+    data.detail ? JSON.stringify(data.detail) : null
   );
-  
-  return { id, ...data, timestamp: now };
+
+  return getEventById(id);
 }
 
 export function getCommentsByTask(taskId) {

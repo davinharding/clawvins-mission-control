@@ -26,6 +26,19 @@ export type Agent = {
   avatarColor?: string | null;
 };
 
+export type EventDetail = {
+  channel?: string;
+  channelName?: string;
+  sessionKey?: string;
+  content?: string;
+  tools?: Array<{ name: string; inputKeys: string[] }>;
+  toolName?: string;
+  model?: string;
+  tokens?: number;
+  cost?: number;
+  role?: string;
+};
+
 export type EventItem = {
   id: string;
   type: string;
@@ -33,6 +46,7 @@ export type EventItem = {
   agentId?: string | null;
   taskId?: string | null;
   timestamp: number;
+  detail?: EventDetail | null;
 };
 
 export type Comment = {

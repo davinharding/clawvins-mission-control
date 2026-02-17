@@ -28,6 +28,7 @@ import {
 } from "@/lib/api";
 import { createSocket, type ConnectionState } from "@/lib/socket";
 import { TaskEditModal } from "@/components/TaskEditModal";
+import { EventDetailModal } from "@/components/EventDetailModal";
 import { useToast } from "@/lib/toast";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { NotificationTray, type Notification } from "@/components/NotificationTray";
@@ -119,6 +120,17 @@ const statusRing: Record<Agent["status"], string> = {
 const formatTime = (value: number) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+const eventIcon: Record<string, string> = {
+  message_received: "📨",
+  agent_response:   "💬",
+  tool_call:        "🔧",
+  task_created:     "📋",
+  task_updated:     "↕️",
+  task_assigned:    "👤",
+  comment_created:  "💬",
+  session_started:  "🟢",
+};
+
 const upsertById = <T extends { id: string }>(items: T[], item: T, prepend = false) => {
   const index = items.findIndex((existing) => existing.id === item.id);
   if (index === -1) {
@@ -197,6 +209,7 @@ export default function HomePage() {
   });
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = React.useState<EventItem | null>(null);
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
 
@@ -846,33 +859,34 @@ export default function HomePage() {
                   {events.map((event, index) => {
                     const agent = event.agentId ? agentById[event.agentId] : null;
                     const isNew = index === 0; // First item is newest
+                    const icon = eventIcon[event.type] ?? "⚡";
                     return (
-                      <div
+                      <button
                         key={event.id}
+                        type="button"
                         data-testid="event-item"
+                        onClick={() => setSelectedEvent(event)}
                         className={cn(
-                          "flex gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 transition-all",
+                          "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60",
                           isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
                         )}
                       >
-                        <Avatar
-                          className={cn("ring-2", statusRing[agent?.status ?? "online"])}
-                        >
-                          <AvatarFallback>
-                            {agent?.name
-                              ?.split(" ")
-                              .map((part) => part[0])
-                              .join("") ?? "MC"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold">{agent?.name ?? "System"}</p>
-                          <p className="text-xs text-muted-foreground">{event.message}</p>
+                        <span className="text-base flex-shrink-0 pt-0.5">{icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold truncate">{agent?.name ?? "System"}</p>
+                            {event.detail?.channelName && event.detail.channelName !== "unknown" && (
+                              <span className="text-[10px] text-muted-foreground font-mono truncate">
+                                {event.detail.channelName}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{event.message}</p>
                         </div>
-                        <span className="text-xs text-muted-foreground font-mono">
+                        <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
                           {formatTime(event.timestamp)}
                         </span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -893,6 +907,13 @@ export default function HomePage() {
         }}
         onSave={handleSaveTask}
         onDelete={handleDeleteTask}
+      />
+
+      <EventDetailModal
+        open={!!selectedEvent}
+        event={selectedEvent}
+        agentName={selectedEvent?.agentId ? agentById[selectedEvent.agentId]?.name : undefined}
+        onClose={() => setSelectedEvent(null)}
       />
     </div>
   );

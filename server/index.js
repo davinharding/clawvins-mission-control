@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.js';
 import agentTasksRoutes from './routes/agent-tasks.js';
 import { setupWebSocket } from './socket.js';
 import { SessionMonitor } from './session-monitor.js';
+import { createEvent } from './db.js';
 
 dotenv.config();
 
@@ -64,27 +65,55 @@ app.use('/api/agents', authMiddleware, agentsRoutes);
 app.use('/api/events', authMiddleware, eventsRoutes);
 app.use('/api/agent-tasks', agentTasksRoutes);
 
-// Admin endpoint for session sync (called by agent cron)
+// Admin endpoint for session sync (called by watch-sessions.js)
 app.post('/api/admin/session-sync', express.json(), (req, res) => {
   try {
-    const { sessions, secret } = req.body;
-    
-    // Simple secret-based auth (environment variable)
-    const expectedSecret = process.env.ADMIN_SECRET || 'change-me-in-production';
-    if (secret !== expectedSecret) {
+    const adminSecret = process.env.ADMIN_SECRET || 'REDACTED_SECRET';
+
+    // Accept secret in header or body (header preferred)
+    const headerSecret = req.headers['x-admin-secret'];
+    const bodySecret = req.body?.secret;
+    if (headerSecret !== adminSecret && bodySecret !== adminSecret) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    
-    if (!app.sessionMonitor) {
-      return res.status(503).json({ error: 'Session monitor not initialized' });
+
+    const { events = [] } = req.body;
+    let stored = 0;
+
+    for (const evt of events) {
+      try {
+        const savedEvent = createEvent({
+          id: evt.id,
+          type: evt.type,
+          message: evt.message,
+          agentId: evt.agentId || null,
+          taskId: evt.taskId || null,
+          timestamp: evt.timestamp || Date.now(),
+          detail: evt.detail || null,
+        });
+
+        if (savedEvent) {
+          const formatted = {
+            id: savedEvent.id,
+            type: savedEvent.type,
+            message: savedEvent.message,
+            agentId: savedEvent.agent_id,
+            taskId: savedEvent.task_id,
+            timestamp: savedEvent.timestamp,
+            detail: savedEvent.detail ? JSON.parse(savedEvent.detail) : null,
+          };
+          req.app.io.emit('event.new', { event: formatted });
+          stored++;
+        }
+      } catch (err) {
+        // Likely duplicate ID — skip silently
+        if (!err.message?.includes('UNIQUE')) {
+          console.error('[Admin] Event insert error:', err.message);
+        }
+      }
     }
-    
-    const eventCount = app.sessionMonitor.processSessions(sessions || []);
-    res.json({ 
-      success: true, 
-      eventsGenerated: eventCount,
-      stats: app.sessionMonitor.getStats()
-    });
+
+    res.json({ success: true, stored });
   } catch (err) {
     console.error('[Admin] Session sync error:', err);
     res.status(500).json({ error: err.message });

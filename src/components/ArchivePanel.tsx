@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Archive, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,13 @@ export function ArchivePanel({ tasks, agentById, onRestore, onOpenTask, isLoadin
   const [restoringId, setRestoringId] = React.useState<string | null>(null);
   const [restoreMenuId, setRestoreMenuId] = React.useState<string | null>(null);
 
+  const { isOver, setNodeRef } = useDroppable({ id: "archived" });
+
+  // Auto-expand when a task is dragged over the archive panel
+  React.useEffect(() => {
+    if (isOver) setOpen(true);
+  }, [isOver]);
+
   const handleRestore = async (taskId: string, status: TaskStatus) => {
     setRestoringId(taskId);
     setRestoreMenuId(null);
@@ -46,24 +54,38 @@ export function ArchivePanel({ tasks, agentById, onRestore, onOpenTask, isLoadin
     });
 
   return (
-    <div className="border-t border-border/60 bg-card/20">
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "border-t border-border/60 bg-card/20 transition-colors",
+        isOver && "border-primary/60 bg-primary/5"
+      )}
+    >
       {/* Toggle Header */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-3 px-6 py-3 text-left transition-colors hover:bg-muted/30"
+        className={cn(
+          "flex w-full items-center gap-3 px-6 py-3 text-left transition-colors hover:bg-muted/30",
+          isOver && "bg-primary/10"
+        )}
         aria-expanded={open}
       >
-        <Archive className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        <span className="flex-1 text-sm font-medium text-muted-foreground">
+        <Archive className={cn("h-4 w-4 flex-shrink-0", isOver ? "text-primary" : "text-muted-foreground")} />
+        <span className={cn("flex-1 text-sm font-medium", isOver ? "text-primary" : "text-muted-foreground")}>
           Archive
         </span>
-        {tasks.length > 0 && (
+        {isOver && (
+          <span className="text-xs font-medium text-primary animate-pulse">
+            Drop to archive
+          </span>
+        )}
+        {!isOver && tasks.length > 0 && (
           <Badge variant="outline" className="text-xs font-mono">
             {tasks.length}
           </Badge>
         )}
-        {isLoading && (
+        {!isOver && isLoading && (
           <span className="text-xs text-muted-foreground animate-pulse">loading…</span>
         )}
         {open ? (
@@ -73,10 +95,22 @@ export function ArchivePanel({ tasks, agentById, onRestore, onOpenTask, isLoadin
         )}
       </button>
 
+      {/* Drop zone indicator when closed but hovering */}
+      {isOver && !open && (
+        <div className="mx-6 mb-3 flex items-center justify-center rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 py-4 text-sm text-primary/70">
+          Release to archive this task
+        </div>
+      )}
+
       {/* Archive Content */}
       {open && (
         <div className="px-6 pb-6">
-          {tasks.length === 0 ? (
+          {isOver && (
+            <div className="mb-4 flex items-center justify-center rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 py-4 text-sm text-primary/70">
+              Release to archive this task
+            </div>
+          )}
+          {tasks.length === 0 && !isOver ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
               <Archive className="h-8 w-8 opacity-30" />
               <p className="text-sm">No archived tasks</p>

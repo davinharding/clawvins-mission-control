@@ -74,9 +74,36 @@ const columnLabels: Record<TaskStatus, string> = {
   backlog: "Backlog",
   todo: "To Do",
   "in-progress": "In Progress",
-  testing: "Testing / QA",
+  testing: "Testing",
   done: "Done",
   archived: "Archived",
+};
+
+const columnEmoji: Record<TaskStatus, string> = {
+  backlog: "📋 ",
+  todo: "📌 ",
+  "in-progress": "⚡ ",
+  testing: "🧪 ",
+  done: "✅ ",
+  archived: "",
+};
+
+const columnTextColor: Record<TaskStatus, string> = {
+  backlog: "text-slate-400",
+  todo: "text-sky-400",
+  "in-progress": "text-violet-400",
+  testing: "text-amber-400",
+  done: "text-emerald-400",
+  archived: "text-muted-foreground",
+};
+
+const columnBorderBg: Record<TaskStatus, string> = {
+  backlog: "",
+  todo: "border-sky-500/20 bg-sky-500/5",
+  "in-progress": "border-violet-500/30 bg-violet-500/5",
+  testing: "border-amber-500/40 bg-amber-500/5",
+  done: "border-emerald-500/30 bg-emerald-500/5",
+  archived: "",
 };
 
 const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
@@ -793,40 +820,40 @@ export default function HomePage() {
                       id={column}
                       className={cn(
                         "flex-col min-h-0 overflow-hidden",
-                        column === "testing" && "border-amber-500/40 bg-amber-500/5"
+                        columnBorderBg[column]
                       )}
                     >
                       <div data-testid={`column-${column}`} className="flex flex-col min-h-0 overflow-hidden">
-                        {/* Column header - fixed */}
-                        <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-2">
-                          <span className={cn(
-                            "text-sm font-semibold uppercase tracking-[0.2em]",
-                            column === "testing" ? "text-amber-400" : "text-muted-foreground"
-                          )}>
-                            {column === "testing" ? "🧪 " : ""}{columnLabels[column]}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
+                        {/* Column header - title row + sort row stacked */}
+                        <div className="mb-3 flex-shrink-0">
+                          <div className="flex items-center justify-between gap-1 mb-1.5">
+                            <span className={cn(
+                              "text-xs font-bold uppercase tracking-[0.18em]",
+                              columnTextColor[column]
+                            )}>
+                              {columnEmoji[column]}{columnLabels[column]}
+                            </span>
+                            <span className="text-xs font-mono text-muted-foreground">
                               {columnTasks.length}
                             </span>
-                            <Select
-                              aria-label={`Sort ${columnLabels[column]} tasks`}
-                              value={columnSorts[column]}
-                              onChange={(event) =>
-                                setColumnSorts((prev) => ({
-                                  ...prev,
-                                  [column]: event.target.value as ColumnSort,
-                                }))
-                              }
-                              className="h-7 w-[160px] rounded-lg border-border/60 bg-muted/40 px-2 text-[11px]"
-                            >
-                              {columnSortOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </Select>
                           </div>
+                          <Select
+                            aria-label={`Sort ${columnLabels[column]} tasks`}
+                            value={columnSorts[column]}
+                            onChange={(event) =>
+                              setColumnSorts((prev) => ({
+                                ...prev,
+                                [column]: event.target.value as ColumnSort,
+                              }))
+                            }
+                            className="h-6 w-full rounded-md border-border/60 bg-muted/40 px-2 text-[10px]"
+                          >
+                            {columnSortOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </Select>
                         </div>
                         {/* Task list - scrollable */}
                         <div className="flex-1 overflow-y-auto" data-testid="task-list">
@@ -941,21 +968,21 @@ export default function HomePage() {
                   );
                 })() : null}
               </DragOverlay>
-            </DndContext>
 
-            {/* Archive Panel - collapsed by default, below the board */}
-            <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
-              <ArchivePanel
-                tasks={archivedTasks}
-                agentById={agentById}
-                onRestore={handleRestoreTask}
-                onOpenTask={(taskId) => {
-                  setActiveTaskId(taskId);
-                  setModalOpen(true);
-                }}
-                isLoading={loading}
-              />
-            </div>
+              {/* Archive Panel - inside DndContext so it can receive drops */}
+              <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
+                <ArchivePanel
+                  tasks={archivedTasks}
+                  agentById={agentById}
+                  onRestore={handleRestoreTask}
+                  onOpenTask={(taskId) => {
+                    setActiveTaskId(taskId);
+                    setModalOpen(true);
+                  }}
+                  isLoading={loading}
+                />
+              </div>
+            </DndContext>
           </section>
 
           {/* RIGHT SIDEBAR - Event Feed */}

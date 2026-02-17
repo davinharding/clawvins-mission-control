@@ -35,17 +35,21 @@ router.post('/', validateBody(schemas.commentCreate), (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
+    // Resolve author: body override takes priority over token identity
+    const resolvedAuthorId = req.body.authorId || req.user.id;
+    const resolvedAuthorName = req.body.authorName || req.user.name;
+
     const comment = createComment({
       taskId: req.params.taskId,
-      authorId: req.body.authorId || req.user.id,
-      authorName: req.body.authorName || req.user.name,
+      authorId: resolvedAuthorId,
+      authorName: resolvedAuthorName,
       text: req.body.text,
     });
 
     const event = createEvent({
       type: 'comment_created',
-      message: `${req.user.name} commented on task: ${task.title}`,
-      agentId: req.user.id,
+      message: `${resolvedAuthorName} commented on task: ${task.title}`,
+      agentId: resolvedAuthorId,
       taskId: task.id,
     });
 

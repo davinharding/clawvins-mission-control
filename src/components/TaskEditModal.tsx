@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { CommentsSection } from "@/components/CommentsSection";
+import { LinkifiedText } from "@/components/LinkifiedText";
 import { useToast } from "@/lib/toast";
 
 type TaskEditModalProps = {
@@ -204,6 +205,11 @@ export function TaskEditModal({
               maxLength={2000}
               placeholder="Describe the mission details..."
             />
+            {/https?:\/\//.test(description) && (
+              <p className="rounded-md bg-muted/40 px-3 py-2 text-sm leading-relaxed break-words">
+                <LinkifiedText text={description} />
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">

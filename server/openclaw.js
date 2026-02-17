@@ -173,12 +173,26 @@ export async function getAgentsFromSessions() {
   let sessions = await getSessions();
   
   // If sessions is our fallback format (has 'key' property), transform it
-  if (sessions.length && sessions[0]?.key?.startsWith?.('agent:')) {
+  if (sessions.length && sessions[0]?.key && !sessions[0]?.sessionId) {
+    // Fallback data from getFallbackAgents() has 'key' not full session data
+    const agentIdMap = {
+      'coder': 'agent-patch',
+      'clawvin': 'agent-clawvin',
+      'alpha': 'agent-alpha',
+      'nova': 'agent-nova',
+      'stagesnap-business': 'agent-scout',
+      'health-tracking': 'agent-vitals',
+      'training': 'agent-atlas',
+      'outreach': 'agent-iris',
+      'finance': 'agent-ledger',
+    };
+    
     sessions = sessions.map(s => ({
-      agentId: s.key.split(':')[1],
-      agent: s.key.split(':')[1],
-      name: s.name || s.key.split(':')[1],
-      status: 'online',
+      agentId: agentIdMap[s.key] || `agent-${s.key}`,
+      agent: s.key,
+      name: s.name || s.key,
+      role: s.role || 'unknown',
+      status: s.status || 'online',
     }));
   }
   

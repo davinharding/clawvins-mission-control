@@ -96,7 +96,8 @@ const addEvent = (items: EventItem[], event: EventItem) => {
   if (items.some((existing) => existing.id === event.id)) {
     return items;
   }
-  return [...items, event];
+  // Add new event at the beginning (newest first)
+  return [event, ...items];
 };
 
 export default function HomePage() {
@@ -568,8 +569,8 @@ export default function HomePage() {
               </div>
             </CardHeader>
             <Separator />
-            <CardContent className="flex-1 overflow-hidden">
-              <ScrollArea ref={eventRef} className="h-full max-h-[600px] space-y-4 pr-2">
+            <CardContent className="flex-1 overflow-hidden p-4">
+              <ScrollArea ref={eventRef} className="h-full pr-2">
                 <div className="space-y-4">
                   {events.map((event) => {
                     const agent = event.agentId ? agentById[event.agentId] : null;

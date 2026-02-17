@@ -65,49 +65,60 @@ function initDB() {
     // Column already exists — fine
   }
 
-  // Migration: add 'testing' status to tasks CHECK constraint (for existing DBs)
-  // Uses PRAGMA writable_schema to update in-place — avoids table rename complexity
-  try {
-    const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get();
-    if (tableInfo && !tableInfo.sql.includes("'testing'")) {
-      const newSql = tableInfo.sql.replace(
-        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'done'))",
-        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done', 'archived'))"
-      );
-      db.pragma('writable_schema = ON');
-      db.prepare("UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'tasks'").run(newSql);
-      db.pragma('writable_schema = OFF');
-      db.pragma('integrity_check');
-      console.log('[DB] Migrated tasks table: added testing+archived status via writable_schema');
-    }
-  } catch (err) {
-    console.error('[DB] Migration error (tasks status constraint):', err);
-  }
-
-  // Migration: add 'archived' status to tasks CHECK constraint (for existing DBs with testing but no archived)
-  try {
-    const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get();
-    if (tableInfo && tableInfo.sql.includes("'testing'") && !tableInfo.sql.includes("'archived'")) {
-      const newSql = tableInfo.sql.replace(
-        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done'))",
-        "CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done', 'archived'))"
-      );
-      db.pragma('writable_schema = ON');
-      db.prepare("UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'tasks'").run(newSql);
-      db.pragma('writable_schema = OFF');
-      db.pragma('integrity_check');
-      console.log('[DB] Migrated tasks table: added archived status via writable_schema');
-    }
-  } catch (err) {
-    console.error('[DB] Migration error (tasks archived status):', err);
-  }
-
   // Migration: add done_at column if it doesn't exist
   try {
     db.prepare("ALTER TABLE tasks ADD COLUMN done_at INTEGER").run();
     console.log('[DB] Migrated tasks table: added done_at column');
   } catch {
     // Column already exists — fine
+  }
+
+  // Migration: update status CHECK constraint to include 'testing' and 'archived'
+  // Uses rename+recreate (reliable across all SQLite environments)
+  try {
+    const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get();
+    const needsMigration = tableInfo && (
+      !tableInfo.sql.includes("'testing'") ||
+      !tableInfo.sql.includes("'archived'")
+    );
+    if (needsMigration) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS tasks_migration_tmp (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT NOT NULL,
+          assigned_agent TEXT,
+          priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          created_by TEXT,
+          tags TEXT,
+          done_at INTEGER
+        );
+        INSERT OR IGNORE INTO tasks_migration_tmp (id, title, description, status, assigned_agent, priority, created_at, updated_at, created_by, tags, done_at)
+          SELECT id, title, description, status, assigned_agent, priority, created_at, updated_at, created_by, tags, done_at FROM tasks;
+        DROP TABLE tasks;
+        CREATE TABLE tasks (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT NOT NULL CHECK(status IN ('backlog', 'todo', 'in-progress', 'testing', 'done', 'archived')),
+          assigned_agent TEXT,
+          priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          created_by TEXT,
+          tags TEXT,
+          done_at INTEGER
+        );
+        INSERT INTO tasks SELECT * FROM tasks_migration_tmp;
+        DROP TABLE tasks_migration_tmp;
+      `);
+      console.log('[DB] Migrated tasks table: added testing+archived status');
+    }
+  } catch (err) {
+    console.error('[DB] Migration error (tasks status constraint):', err.message);
   }
 
   // Comments table
@@ -122,6 +133,40 @@ function initDB() {
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     )
   `);
+
+  // Migration: fix comments table if FK references tasks_old (from a bad prior migration)
+  try {
+    const commentsInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='comments'").get();
+    if (commentsInfo && commentsInfo.sql.includes('"tasks_old"')) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS comments_fix_tmp (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          author_id TEXT NOT NULL,
+          author_name TEXT NOT NULL,
+          text TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+        INSERT OR IGNORE INTO comments_fix_tmp SELECT * FROM comments;
+        DROP TABLE comments;
+        CREATE TABLE comments (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          author_id TEXT NOT NULL,
+          author_name TEXT NOT NULL,
+          text TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+        INSERT INTO comments SELECT * FROM comments_fix_tmp;
+        DROP TABLE comments_fix_tmp;
+      `);
+      console.log('[DB] Migrated comments table: fixed FK reference to tasks');
+    }
+  } catch (err) {
+    console.error('[DB] Migration error (comments FK fix):', err.message);
+  }
 
   // Auth tokens table
   db.exec(`

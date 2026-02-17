@@ -461,9 +461,20 @@ export default function HomePage() {
   const filteredTasks = React.useMemo(() => {
     // Archived tasks never appear on the main board
     const boardTasks = tasks.filter((task) => task.status !== "archived");
-    if (!selectedAgentId) return boardTasks;
-    return boardTasks.filter((task) => task.assignedAgent === selectedAgentId);
-  }, [tasks, selectedAgentId]);
+
+    // Filter by category (role) — only show tasks assigned to agents in the selected category
+    const visibleAgentIds = new Set(visibleAgents.map((a) => a.id));
+    const roleFiltered =
+      selectedRole === "All"
+        ? boardTasks
+        : boardTasks.filter(
+            (task) => task.assignedAgent && visibleAgentIds.has(task.assignedAgent)
+          );
+
+    // Further filter by a specific selected agent
+    if (!selectedAgentId) return roleFiltered;
+    return roleFiltered.filter((task) => task.assignedAgent === selectedAgentId);
+  }, [tasks, selectedAgentId, selectedRole, visibleAgents]);
 
   const stats = React.useMemo(() => {
     const completed = tasks.filter((task) => task.status === "done");
@@ -711,7 +722,14 @@ export default function HomePage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
                   Agent Filters
                 </p>
-                <Tabs value={selectedRole} onValueChange={(v) => setSelectedRole(v as AgentRole | "All")} options={roles} />
+                <Tabs
+                  value={selectedRole}
+                  onValueChange={(v) => {
+                    setSelectedRole(v as AgentRole | "All");
+                    setSelectedAgentId(null); // clear per-agent filter when switching category
+                  }}
+                  options={roles}
+                />
                 <div className="flex items-center justify-between text-xs font-semibold uppercase text-muted-foreground">
                   <span>Agents</span>
                   <button

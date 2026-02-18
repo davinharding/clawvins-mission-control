@@ -51,6 +51,7 @@ import { KanbanColumn } from "@/components/KanbanColumn";
 import { DraggableCard } from "@/components/DraggableCard";
 import { ArchivePanel } from "@/components/ArchivePanel";
 import { LinkifiedText } from "@/components/LinkifiedText";
+import { GlobalSearch } from "@/components/GlobalSearch";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -782,6 +783,15 @@ export default function HomePage() {
               </div>
             </div>
           )}
+          {/* Global Search — mobile */}
+          <div className="px-3 pb-1.5">
+            <GlobalSearch
+              onOpenTask={(taskId) => {
+                setActiveTaskId(taskId);
+                setModalOpen(true);
+              }}
+            />
+          </div>
           {/* Row 2: Agent filter pills — horizontally scrollable */}
           <div className="flex gap-1.5 overflow-x-auto px-3 py-1 scrollbar-hide">
             {roles.map((role) => (
@@ -847,6 +857,12 @@ export default function HomePage() {
             </div>
             <div className="flex flex-col items-end gap-3 text-sm">
               <div className="flex items-center gap-2">
+                <GlobalSearch
+                  onOpenTask={(taskId) => {
+                    setActiveTaskId(taskId);
+                    setModalOpen(true);
+                  }}
+                />
                 <ConnectionStatus state={connectionState} />
                 <NotificationTray
                   notifications={notifications}

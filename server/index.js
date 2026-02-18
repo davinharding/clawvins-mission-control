@@ -72,16 +72,25 @@ async function syncAgentsFromOpenClaw() {
     const agents = await getAgentsFromSessions();
     let synced = 0;
     for (const agent of agents) {
-      const existing = db.prepare('SELECT id FROM agents WHERE id = ?').get(agent.id);
-      if (!existing) {
-        createAgent(agent);
-        synced++;
-        console.log(`[AgentSync] Added new agent: ${agent.name} (${agent.id})`);
-      } else {
-        // Update status/last_active
+      // Primary dedup: by agent ID
+      const existingById = db.prepare('SELECT id FROM agents WHERE id = ?').get(agent.id);
+      if (existingById) {
         db.prepare('UPDATE agents SET status = ?, last_active = ? WHERE id = ?')
           .run(agent.status, Date.now(), agent.id);
+        continue;
       }
+      // Secondary dedup: by name — prevent duplicate display names from different ID formats
+      const existingByName = db.prepare('SELECT id FROM agents WHERE LOWER(name) = LOWER(?)').get(agent.name);
+      if (existingByName) {
+        // Update existing record with correct ID and status instead of inserting a dupe
+        db.prepare('UPDATE agents SET id = ?, status = ?, last_active = ? WHERE id = ?')
+          .run(agent.id, agent.status, Date.now(), existingByName.id);
+        console.log(`[AgentSync] Re-keyed agent "${agent.name}" from ${existingByName.id} → ${agent.id}`);
+        continue;
+      }
+      createAgent(agent);
+      synced++;
+      console.log(`[AgentSync] Added new agent: ${agent.name} (${agent.id})`);
     }
     if (synced > 0) console.log(`[AgentSync] Synced ${synced} new agents from OpenClaw`);
   } catch (err) {

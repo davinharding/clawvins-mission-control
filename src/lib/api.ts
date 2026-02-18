@@ -178,17 +178,15 @@ export async function getComments(taskId: string) {
   });
 }
 
-export async function createComment(
-  taskId: string,
-  text: string,
-  author?: { authorId?: string; authorName?: string }
-) {
+// Author is determined server-side from the auth token.
+// UI callers pass only text. Agents using API key can send x-agent-id header for identity.
+export async function createComment(taskId: string, text: string) {
   return request<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
-    body: JSON.stringify({ text, ...author }),
+    body: JSON.stringify({ text }),
   });
 }

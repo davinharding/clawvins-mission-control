@@ -158,11 +158,12 @@ export function TaskEditModal({
     }
   };
 
-  const handlePostComment = async (text: string, authorId: string, authorName: string) => {
+  const handlePostComment = async (text: string) => {
     if (!task) return;
     setPostingComment(true);
     try {
-      const response = await createComment(task.id, text, { authorId, authorName });
+      // Author is determined server-side from the auth token — no override passed
+      const response = await createComment(task.id, text);
       setComments((prev) => upsertById(prev, response.comment));
     } catch (err) {
       notify({
@@ -286,7 +287,6 @@ export function TaskEditModal({
 
         <CommentsSection
           comments={comments}
-          agents={agents}
           loading={loadingComments}
           posting={postingComment}
           onPost={handlePostComment}

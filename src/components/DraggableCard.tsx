@@ -18,11 +18,11 @@ export function DraggableCard({ id, children }: Props) {
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{ ...style, touchAction: 'none', WebkitUserSelect: 'none' }}
       {...listeners}
       {...attributes}
       className={cn(
-        "cursor-grab active:cursor-grabbing transition-opacity",
+        "cursor-grab active:cursor-grabbing transition-opacity select-none",
         isDragging && "opacity-30"
       )}
     >

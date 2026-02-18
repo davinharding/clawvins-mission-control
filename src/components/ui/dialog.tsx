@@ -48,7 +48,7 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center sm:px-4">
       <button
         type="button"
         aria-label="Close dialog"
@@ -59,7 +59,8 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative z-10 w-full max-w-3xl rounded-2xl border border-border/70 bg-card/95 p-6 shadow-2xl backdrop-blur",
+          "relative z-10 w-full sm:max-w-3xl rounded-none sm:rounded-2xl border-0 sm:border border-border/70 bg-card/95 p-4 sm:p-6 shadow-2xl backdrop-blur",
+          "flex flex-col h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-hidden sm:overflow-y-auto",
           className
         )}
         {...props}
@@ -88,8 +89,12 @@ export function DialogDescription({
   return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
 }
 
-export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export function DialogFooter({ className, style, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex flex-wrap items-center justify-end gap-3", className)} {...props} />
+    <div
+      className={cn("flex-shrink-0 flex flex-wrap items-center justify-end gap-3 pt-4", className)}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)', ...style }}
+      {...props}
+    />
   );
 }

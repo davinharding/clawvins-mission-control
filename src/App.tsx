@@ -39,16 +39,18 @@ import {
   DragOverlay,
   PointerSensor,
   KeyboardSensor,
+  TouchSensor,
+  useDroppable,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { DraggableCard } from "@/components/DraggableCard";
 import { ArchivePanel } from "@/components/ArchivePanel";
 import { LinkifiedText } from "@/components/LinkifiedText";
-import { GlobalSearch } from "@/components/GlobalSearch";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -226,6 +228,22 @@ const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
   return result;
 };
 
+// Mobile droppable row — unique "mobile-{status}" IDs to avoid conflicts with desktop columns
+function MobileDropRow({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `mobile-${id}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex overflow-x-auto gap-3 pb-2 scrollbar-hide min-h-[80px] rounded-lg transition-colors",
+        isOver && "bg-primary/5 ring-1 ring-primary/30"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 const sortTasks = (items: Task[], sort: ColumnSort) => {
   const sorted = [...items];
   const byPriority = (task: Task) => priorityWeight[(task.priority || "low") as NonNullable<TaskPriority>] ?? 0;
@@ -260,6 +278,8 @@ const sortTasks = (items: Task[], sort: ColumnSort) => {
 export default function HomePage() {
   const [selectedRole, setSelectedRole] = React.useState<AgentRole | "All">("All");
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+  const [showStats, setShowStats] = React.useState(false);
+  const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [events, setEvents] = React.useState<EventItem[]>([]);
@@ -288,6 +308,9 @@ export default function HomePage() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 300, tolerance: 8 },
     }),
     useSensor(KeyboardSensor)
   );
@@ -545,16 +568,20 @@ export default function HomePage() {
     const { active, over } = event;
     if (!over) return;
 
-    const taskId = active.id as string;
-    const newStatus = over.id as TaskStatus;
-    const existing = tasks.find((t) => t.id === taskId);
-    if (!existing || existing.status === newStatus) return;
+    // Strip mobile- prefix from both active and over IDs
+    const taskId = String(active.id).replace(/^mobile-/, '');
 
-    // Handle archive drop target
+    // Handle archive drop target first
     if (over.id === ARCHIVE_DROP_ID) {
       await handleArchiveTask(taskId);
       return;
     }
+
+    // Handle both desktop column IDs and mobile row IDs (prefixed with "mobile-")
+    const overId = String(over.id);
+    const newStatus = overId.replace(/^mobile-/, '') as TaskStatus;
+    const existing = tasks.find((t) => t.id === taskId);
+    if (!existing || existing.status === newStatus) return;
 
     // Optimistic update
     setTasks((prev) =>
@@ -687,75 +714,258 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex flex-col gap-6 border-b border-border/60 bg-card/60 px-6 py-6 backdrop-blur">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              Mission Control v2
-            </p>
-            <h1 className="text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
-          </div>
-          <div className="flex flex-col items-start gap-3 text-sm lg:items-end">
-            <div className="flex items-center gap-2">
-              <GlobalSearch
-                onOpenTask={(taskId) => {
-                  setActiveTaskId(taskId);
+      <header className="flex-shrink-0 border-b border-border/60 bg-card/60 backdrop-blur">
+        {/* ── MOBILE HEADER (lg:hidden) — 2 compact rows ── */}
+        <div className="lg:hidden">
+          {/* Row 1: MC V2 | CONNECTED | 🔔 | Stats▼ | ⚡Feed | + New */}
+          <div className="flex items-center gap-1.5 py-2 px-3">
+            <span className="text-xs font-semibold tracking-widest text-muted-foreground mr-auto">MC V2</span>
+            <ConnectionStatus state={connectionState} />
+            <NotificationTray
+              notifications={notifications}
+              onMarkRead={(id) =>
+                setNotifications((prev) =>
+                  prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+                )
+              }
+              onMarkAllRead={() =>
+                setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+              }
+              onClickNotification={(n) => {
+                if (n.taskId) {
+                  setActiveTaskId(n.taskId);
                   setModalOpen(true);
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowStats((v) => !v)}
+              className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
+            >
+              Stats {showStats ? "▲" : "▼"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowEventFeed((v) => !v)}
+              className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
+            >
+              ⚡ Feed
+            </button>
+            <button
+              type="button"
+              onClick={handleAddTask}
+              disabled={loading}
+              className="flex items-center gap-0.5 rounded-full border border-primary/60 bg-primary/10 text-primary py-0.5 px-2 text-xs font-semibold transition hover:bg-primary/20 disabled:opacity-50"
+            >
+              + New
+            </button>
+          </div>
+          {/* Collapsible stats */}
+          {showStats && (
+            <div className="grid grid-cols-4 gap-1.5 px-3 pb-2">
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Total</span>
+                <span className="text-sm font-semibold">{stats.total}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Done</span>
+                <span className="text-sm font-semibold">{stats.completedToday}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Agents</span>
+                <span className="text-sm font-semibold">{stats.activeAgents}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Avg</span>
+                <span className="text-sm font-semibold">{stats.avgCompletion}h</span>
+              </div>
+            </div>
+          )}
+          {/* Row 2: Agent filter pills — horizontally scrollable */}
+          <div className="flex gap-1.5 overflow-x-auto px-3 py-1 scrollbar-hide">
+            {roles.map((role) => (
+              <button
+                key={role.value}
+                type="button"
+                onClick={() => {
+                  setSelectedRole(role.value as AgentRole | "All");
+                  setSelectedAgentId(null);
                 }}
-              />
-              <ConnectionStatus state={connectionState} />
-              <NotificationTray
-                notifications={notifications}
-                onMarkRead={(id) =>
-                  setNotifications((prev) =>
-                    prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-                  )
-                }
-                onMarkAllRead={() =>
-                  setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-                }
-                onClickNotification={(n) => {
-                  if (n.taskId) {
-                    setActiveTaskId(n.taskId);
-                    setModalOpen(true);
+                className={cn(
+                  "flex-shrink-0 rounded-full border py-0.5 px-2.5 text-xs font-semibold transition",
+                  selectedRole === role.value
+                    ? "border-primary/60 bg-primary/10 text-primary"
+                    : "border-border/60 hover:bg-muted/60"
+                )}
+              >
+                {role.label}
+              </button>
+            ))}
+            <div className="flex-shrink-0 w-px bg-border/60 self-stretch my-0.5" />
+            {visibleAgents.map((agent) => {
+              const emoji = getAgentEmoji(agent.name);
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedAgentId(agent.id === selectedAgentId ? null : agent.id)
                   }
-                }}
-              />
-            </div>
-            <div className="flex flex-wrap gap-3 text-sm">
-              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground">Total Tasks</div>
-                <div className="text-2xl font-semibold">{stats.total}</div>
-              </Card>
-              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground">Completed Today</div>
-                <div className="text-2xl font-semibold">{stats.completedToday}</div>
-              </Card>
-              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground">Active Agents</div>
-                <div className="text-2xl font-semibold">{stats.activeAgents}</div>
-              </Card>
-              <Card className="flex min-w-[200px] items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground">Avg Completion</div>
-                <div className="text-2xl font-semibold">{stats.avgCompletion}h</div>
-              </Card>
-            </div>
+                  className={cn(
+                    "flex-shrink-0 flex items-center gap-1 rounded-full border py-0.5 px-2 text-xs font-semibold transition",
+                    selectedAgentId === agent.id
+                      ? "border-primary/60 bg-primary/10 text-primary"
+                      : "border-border/60 hover:bg-muted/60"
+                  )}
+                >
+                  <span>{emoji ?? agent.name[0]}</span>
+                  <span>{agent.name.split(" ")[0]}</span>
+                  <span className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", statusColor[agent.status])} />
+                </button>
+              );
+            })}
           </div>
+          {loading && (
+            <p className="text-xs text-muted-foreground px-3 pb-1">Loading...</p>
+          )}
+          {error && (
+            <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 mx-3 mb-2 px-3 py-1.5 text-xs text-rose-200">
+              {error}
+            </div>
+          )}
         </div>
-        {loading && (
-          <p className="text-sm text-muted-foreground">Loading mission data...</p>
-        )}
-        {error && (
-          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
-            {error}
+
+        {/* ── DESKTOP HEADER (hidden lg:flex) ── */}
+        <div className="hidden lg:flex flex-col gap-4 px-6 py-6">
+          <div className="flex flex-row items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                Mission Control v2
+              </p>
+              <h1 className="text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
+            </div>
+            <div className="flex flex-col items-end gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <ConnectionStatus state={connectionState} />
+                <NotificationTray
+                  notifications={notifications}
+                  onMarkRead={(id) =>
+                    setNotifications((prev) =>
+                      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+                    )
+                  }
+                  onMarkAllRead={() =>
+                    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                  }
+                  onClickNotification={(n) => {
+                    if (n.taskId) {
+                      setActiveTaskId(n.taskId);
+                      setModalOpen(true);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowStats((v) => !v)}
+                  className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60"
+                >
+                  Stats {showStats ? "▲" : "▼"}
+                </button>
+              </div>
+              <div className={cn("w-full flex flex-wrap gap-3 text-sm", showStats ? "flex" : "hidden")}>
+                <Card className="flex items-center gap-3 px-4 py-3">
+                  <div className="text-muted-foreground text-sm">Total Tasks</div>
+                  <div className="text-2xl font-semibold">{stats.total}</div>
+                </Card>
+                <Card className="flex items-center gap-3 px-4 py-3">
+                  <div className="text-muted-foreground text-sm">Done Today</div>
+                  <div className="text-2xl font-semibold">{stats.completedToday}</div>
+                </Card>
+                <Card className="flex items-center gap-3 px-4 py-3">
+                  <div className="text-muted-foreground text-sm">Active Agents</div>
+                  <div className="text-2xl font-semibold">{stats.activeAgents}</div>
+                </Card>
+                <Card className="flex items-center gap-3 px-4 py-3">
+                  <div className="text-muted-foreground text-sm">Avg Completion</div>
+                  <div className="text-2xl font-semibold">{stats.avgCompletion}h</div>
+                </Card>
+              </div>
+            </div>
           </div>
-        )}
+          {loading && (
+            <p className="text-sm text-muted-foreground">Loading mission data...</p>
+          )}
+          {error && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
+              {error}
+            </div>
+          )}
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-6 px-6 py-6 md:grid-cols-[1fr_300px] lg:grid-cols-[240px_1fr_360px]">
-          {/* LEFT SIDEBAR - Agent Filters + Status Legend */}
-          <aside className="flex h-full min-h-0 flex-col gap-6 md:hidden lg:flex">
+        {/* Mobile event feed overlay */}
+        {showEventFeed && (
+          <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur">
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Live Feed</p>
+                <h3 className="text-lg font-semibold">Agent Events</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEventFeed(false)}
+                className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg border border-border/70 text-muted-foreground hover:bg-muted/60 transition"
+                aria-label="Close event feed"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-4">
+                {events.map((event, index) => {
+                  const agent = event.agentId ? agentById[event.agentId] : null;
+                  const isNew = index === 0;
+                  const icon = eventIcon[event.type] ?? "⚡";
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => { setSelectedEvent(event); setShowEventFeed(false); }}
+                      className={cn(
+                        "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
+                        isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
+                      )}
+                    >
+                      <span className="text-base flex-shrink-0 pt-0.5">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold truncate">{agent?.name ?? "System"}</p>
+                          {event.detail?.channelName && event.detail.channelName !== "unknown" && (
+                            <span className="text-[10px] text-muted-foreground font-mono truncate">
+                              {event.detail.channelName}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          <LinkifiedText text={event.message} />
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+                        {formatTime(event.timestamp)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-4 sm:gap-6 px-2 sm:px-6 py-2 sm:py-6 lg:grid-cols-[240px_1fr_360px]">
+          {/* LEFT SIDEBAR - Agent Filters + Status Legend (desktop only) */}
+          <aside className="hidden lg:flex h-full min-h-0 flex-col gap-6">
             {/* Agent Filters Card - flex-1 to take available space, overflow hidden */}
             <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
               <div className="flex-shrink-0 space-y-3 p-6">
@@ -854,16 +1064,16 @@ export default function HomePage() {
           </aside>
 
           {/* CENTER - Kanban Board */}
-          <section className="flex h-full min-h-0 flex-col overflow-hidden">
-            {/* Header - fixed height */}
-            <div className="mb-4 flex flex-shrink-0 flex-wrap items-center justify-between gap-3">
+          <section className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
+            {/* Header - desktop only (mobile uses compact header above) */}
+            <div className="hidden lg:flex mb-4 flex-shrink-0 flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   Kanban Board
                 </p>
                 <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
               </div>
-              <Button onClick={handleAddTask} disabled={loading}>
+              <Button onClick={handleAddTask} disabled={loading} className="min-h-[44px]">
                 Add New Task
               </Button>
             </div>
@@ -874,8 +1084,75 @@ export default function HomePage() {
               sensors={sensors}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
+              onDragCancel={() => setDraggingTaskId(null)}
             >
-              <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-hidden sm:grid-cols-2 lg:grid-cols-5">
+              {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
+              <div className="flex flex-col gap-2 lg:hidden">
+                {columns.map((status) => {
+                  const rowTasks = filteredTasks.filter((t) => t.status === status);
+                  return (
+                    <div key={status}>
+                      {/* Compressed row header */}
+                      <div className="flex items-center gap-2 px-2 py-1">
+                        <span className={cn("text-xs font-bold uppercase tracking-widest", columnColors[status])}>
+                          {columnEmojis[status]} {columnLabels[status]}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{rowTasks.length}</span>
+                      </div>
+                      {/* Droppable horizontal card row */}
+                      <MobileDropRow id={status}>
+                        {rowTasks.map((task) => {
+                          const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
+                          const priority = (task.priority || "low") as TaskPriority;
+                          const agentEmoji = agent ? getAgentEmoji(agent.name) : null;
+                          const agentInitials = agent
+                            ? agentEmoji ?? agent.name.split(" ").map((p) => p[0]).join("")
+                            : "?";
+                          const agentName = agent?.name ?? "Unassigned";
+                          return (
+                            <DraggableCard key={task.id} id={task.id}>
+                              <div
+                                className="min-w-[200px] max-w-[220px] flex-shrink-0 rounded-lg border border-border/60 bg-card/70 px-2.5 py-2 cursor-pointer active:opacity-70"
+                                onClick={() => { setActiveTaskId(task.id); setModalOpen(true); }}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setActiveTaskId(task.id);
+                                    setModalOpen(true);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-start justify-between gap-1 mb-1">
+                                  <h3 className="text-xs font-semibold leading-tight line-clamp-2">{task.title}</h3>
+                                  <Badge variant={priorityVariant[priority]} className="text-[10px] px-1.5 shrink-0">{priority}</Badge>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                  <Avatar className={cn("h-4 w-4", agent ? roleAvatarBg[agent.role] : "")}>
+                                    <AvatarFallback className={cn("text-[8px]", agentEmoji ? "text-[10px] leading-none" : (agent ? roleAvatarText[agent.role] : ""))}>
+                                      {agentInitials}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="truncate">{agentName}</span>
+                                </div>
+                              </div>
+                            </DraggableCard>
+                          );
+                        })}
+                        {rowTasks.length === 0 && (
+                          <div className="min-w-[160px] flex items-center justify-center text-[10px] text-muted-foreground border border-dashed border-border/40 rounded-lg h-16 flex-shrink-0">
+                            Drop here
+                          </div>
+                        )}
+                      </MobileDropRow>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop board: original columns grid */}
+              <div className="hidden lg:grid lg:flex-1 lg:min-h-0 lg:grid-cols-5 lg:overflow-hidden lg:gap-4">
                 {columns.map((column) => {
                   const columnTasks = sortTasks(
                     filteredTasks.filter((task) => task.status === column),
@@ -886,7 +1163,8 @@ export default function HomePage() {
                       key={column}
                       id={column}
                       className={cn(
-                        "flex-col min-h-0 overflow-hidden",
+                        "min-w-[85vw] snap-start flex-shrink-0 min-h-[50vh]",
+                        "lg:min-w-0 lg:flex-shrink lg:min-h-0 lg:overflow-hidden",
                         columnBg[column]
                       )}
                     >
@@ -945,6 +1223,7 @@ export default function HomePage() {
                                     }}
                                     role="button"
                                     tabIndex={0}
+                                    className="min-h-[44px]"
                                   >
                                     <CardHeader className="space-y-2 p-4">
                                       <div className="flex items-start justify-between gap-3">
@@ -1010,10 +1289,10 @@ export default function HomePage() {
                     </KanbanColumn>
                   );
                 })}
-              </div>
+              </div>{/* end desktop board */}
 
               {/* Ghost card while dragging */}
-              <DragOverlay>
+              <DragOverlay modifiers={[snapCenterToCursor]}>
                 {draggingTaskId ? (() => {
                   const task = tasks.find((t) => t.id === draggingTaskId);
                   const agent = task?.assignedAgent ? agentById[task.assignedAgent] : null;
@@ -1067,8 +1346,8 @@ export default function HomePage() {
             </DndContext>
           </section>
 
-          {/* RIGHT SIDEBAR - Event Feed */}
-          <aside className="flex h-full min-h-0 flex-col">
+          {/* RIGHT SIDEBAR - Event Feed (desktop only; mobile uses overlay) */}
+          <aside className="hidden lg:flex h-full min-h-0 flex-col">
             <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
               <div className="flex-shrink-0 p-6">
                 <div className="flex items-center justify-between">
@@ -1119,7 +1398,7 @@ export default function HomePage() {
                         data-testid="event-item"
                         onClick={() => setSelectedEvent(event)}
                         className={cn(
-                          "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60",
+                          "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
                           isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
                         )}
                       >

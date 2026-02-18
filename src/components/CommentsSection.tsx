@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CommentItem } from "@/components/CommentItem";
 
+// Author identity is determined server-side from the auth token.
+// No manual "Post as" selection — UI posts always attribute to the logged-in user.
 type CommentsSectionProps = {
   comments: Comment[];
   loading: boolean;

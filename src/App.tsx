@@ -39,6 +39,8 @@ import {
   DragOverlay,
   PointerSensor,
   KeyboardSensor,
+  TouchSensor,
+  useDroppable,
   useSensor,
   useSensors,
   type DragStartEvent,
@@ -225,6 +227,22 @@ const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
   return result;
 };
 
+// Mobile droppable row — unique "mobile-{status}" IDs to avoid conflicts with desktop columns
+function MobileDropRow({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `mobile-${id}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex overflow-x-auto gap-2 pb-2 scrollbar-hide rounded-lg transition-colors",
+        isOver && "bg-primary/5 ring-1 ring-primary/20"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 const sortTasks = (items: Task[], sort: ColumnSort) => {
   const sorted = [...items];
   const byPriority = (task: Task) => priorityWeight[(task.priority || "low") as NonNullable<TaskPriority>] ?? 0;
@@ -289,6 +307,9 @@ export default function HomePage() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
     }),
     useSensor(KeyboardSensor)
   );
@@ -547,15 +568,18 @@ export default function HomePage() {
     if (!over) return;
 
     const taskId = active.id as string;
-    const newStatus = over.id as TaskStatus;
-    const existing = tasks.find((t) => t.id === taskId);
-    if (!existing || existing.status === newStatus) return;
 
-    // Handle archive drop target
+    // Handle archive drop target first
     if (over.id === ARCHIVE_DROP_ID) {
       await handleArchiveTask(taskId);
       return;
     }
+
+    // Handle both desktop column IDs and mobile row IDs (prefixed with "mobile-")
+    const overId = String(over.id);
+    const newStatus = (overId.startsWith("mobile-") ? overId.slice(7) : overId) as TaskStatus;
+    const existing = tasks.find((t) => t.id === taskId);
+    if (!existing || existing.status === newStatus) return;
 
     // Optimistic update
     setTasks((prev) =>
@@ -688,91 +712,76 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b border-border/60 bg-card/60 px-4 sm:px-6 py-4 sm:py-6 backdrop-blur">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              Mission Control v2
-            </p>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
-          </div>
-          <div className="flex flex-col items-start gap-3 text-sm lg:items-end">
-            <div className="flex items-center gap-2 flex-wrap">
-              <ConnectionStatus state={connectionState} />
-              <NotificationTray
-                notifications={notifications}
-                onMarkRead={(id) =>
-                  setNotifications((prev) =>
-                    prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-                  )
+      <header className="flex-shrink-0 border-b border-border/60 bg-card/60 backdrop-blur">
+        {/* ── MOBILE HEADER (lg:hidden) — 2 compact rows ── */}
+        <div className="lg:hidden">
+          {/* Row 1: MC V2 | CONNECTED | 🔔 | Stats▼ | ⚡Feed | + New */}
+          <div className="flex items-center gap-1.5 py-2 px-3">
+            <span className="text-xs font-semibold tracking-widest text-muted-foreground mr-auto">MC V2</span>
+            <ConnectionStatus state={connectionState} />
+            <NotificationTray
+              notifications={notifications}
+              onMarkRead={(id) =>
+                setNotifications((prev) =>
+                  prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+                )
+              }
+              onMarkAllRead={() =>
+                setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+              }
+              onClickNotification={(n) => {
+                if (n.taskId) {
+                  setActiveTaskId(n.taskId);
+                  setModalOpen(true);
                 }
-                onMarkAllRead={() =>
-                  setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-                }
-                onClickNotification={(n) => {
-                  if (n.taskId) {
-                    setActiveTaskId(n.taskId);
-                    setModalOpen(true);
-                  }
-                }}
-              />
-              {/* Mobile toggle buttons */}
-              <button
-                type="button"
-                onClick={() => setShowStats((v) => !v)}
-                className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold sm:hidden transition hover:bg-muted/60"
-              >
-                Stats {showStats ? "▲" : "▼"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowEventFeed((v) => !v)}
-                className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold lg:hidden transition hover:bg-muted/60"
-              >
-                ⚡ Feed
-              </button>
-            </div>
-            {/* Stat cards: 2x2 grid on mobile, flex on sm+ */}
-            <div className={cn(
-              "w-full text-sm",
-              showStats
-                ? "grid grid-cols-2 gap-3 sm:flex sm:flex-wrap"
-                : "hidden sm:flex sm:flex-wrap sm:gap-3"
-            )}>
-              <Card className="flex items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground text-xs sm:text-sm">Total Tasks</div>
-                <div className="text-xl sm:text-2xl font-semibold">{stats.total}</div>
-              </Card>
-              <Card className="flex items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground text-xs sm:text-sm">Done Today</div>
-                <div className="text-xl sm:text-2xl font-semibold">{stats.completedToday}</div>
-              </Card>
-              <Card className="flex items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground text-xs sm:text-sm">Active Agents</div>
-                <div className="text-xl sm:text-2xl font-semibold">{stats.activeAgents}</div>
-              </Card>
-              <Card className="flex items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground text-xs sm:text-sm">Avg Completion</div>
-                <div className="text-xl sm:text-2xl font-semibold">{stats.avgCompletion}h</div>
-              </Card>
-            </div>
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowStats((v) => !v)}
+              className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
+            >
+              Stats {showStats ? "▲" : "▼"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowEventFeed((v) => !v)}
+              className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
+            >
+              ⚡ Feed
+            </button>
+            <button
+              type="button"
+              onClick={handleAddTask}
+              disabled={loading}
+              className="flex items-center gap-0.5 rounded-full border border-primary/60 bg-primary/10 text-primary py-0.5 px-2 text-xs font-semibold transition hover:bg-primary/20 disabled:opacity-50"
+            >
+              + New
+            </button>
           </div>
-        </div>
-        {loading && (
-          <p className="text-sm text-muted-foreground">Loading mission data...</p>
-        )}
-        {error && (
-          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
-            {error}
-          </div>
-        )}
-      </header>
-
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Mobile-only: horizontal scrollable agent pills */}
-        <div className="lg:hidden flex-shrink-0 border-b border-border/60 bg-card/40">
-          <div className="flex gap-2 overflow-x-auto px-4 py-2 scrollbar-hide">
-            {/* Role filter pills */}
+          {/* Collapsible stats */}
+          {showStats && (
+            <div className="grid grid-cols-4 gap-1.5 px-3 pb-2">
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Total</span>
+                <span className="text-sm font-semibold">{stats.total}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Done</span>
+                <span className="text-sm font-semibold">{stats.completedToday}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Agents</span>
+                <span className="text-sm font-semibold">{stats.activeAgents}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Avg</span>
+                <span className="text-sm font-semibold">{stats.avgCompletion}h</span>
+              </div>
+            </div>
+          )}
+          {/* Row 2: Agent filter pills — horizontally scrollable */}
+          <div className="flex gap-1.5 overflow-x-auto px-3 py-1 scrollbar-hide">
             {roles.map((role) => (
               <button
                 key={role.value}
@@ -782,7 +791,7 @@ export default function HomePage() {
                   setSelectedAgentId(null);
                 }}
                 className={cn(
-                  "flex-shrink-0 flex items-center rounded-full border px-3 text-xs font-semibold transition min-h-[36px]",
+                  "flex-shrink-0 rounded-full border py-0.5 px-2.5 text-xs font-semibold transition",
                   selectedRole === role.value
                     ? "border-primary/60 bg-primary/10 text-primary"
                     : "border-border/60 hover:bg-muted/60"
@@ -791,8 +800,7 @@ export default function HomePage() {
                 {role.label}
               </button>
             ))}
-            <div className="flex-shrink-0 w-px bg-border/60 self-stretch my-1" />
-            {/* Agent pills */}
+            <div className="flex-shrink-0 w-px bg-border/60 self-stretch my-0.5" />
             {visibleAgents.map((agent) => {
               const emoji = getAgentEmoji(agent.name);
               return (
@@ -800,12 +808,10 @@ export default function HomePage() {
                   key={agent.id}
                   type="button"
                   onClick={() =>
-                    setSelectedAgentId(
-                      agent.id === selectedAgentId ? null : agent.id
-                    )
+                    setSelectedAgentId(agent.id === selectedAgentId ? null : agent.id)
                   }
                   className={cn(
-                    "flex-shrink-0 flex items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition min-h-[36px]",
+                    "flex-shrink-0 flex items-center gap-1 rounded-full border py-0.5 px-2 text-xs font-semibold transition",
                     selectedAgentId === agent.id
                       ? "border-primary/60 bg-primary/10 text-primary"
                       : "border-border/60 hover:bg-muted/60"
@@ -813,18 +819,90 @@ export default function HomePage() {
                 >
                   <span>{emoji ?? agent.name[0]}</span>
                   <span>{agent.name.split(" ")[0]}</span>
-                  <span
-                    className={cn(
-                      "h-2 w-2 rounded-full flex-shrink-0",
-                      statusColor[agent.status]
-                    )}
-                  />
+                  <span className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", statusColor[agent.status])} />
                 </button>
               );
             })}
           </div>
+          {loading && (
+            <p className="text-xs text-muted-foreground px-3 pb-1">Loading...</p>
+          )}
+          {error && (
+            <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 mx-3 mb-2 px-3 py-1.5 text-xs text-rose-200">
+              {error}
+            </div>
+          )}
         </div>
 
+        {/* ── DESKTOP HEADER (hidden lg:flex) ── */}
+        <div className="hidden lg:flex flex-col gap-4 px-6 py-6">
+          <div className="flex flex-row items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                Mission Control v2
+              </p>
+              <h1 className="text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
+            </div>
+            <div className="flex flex-col items-end gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <ConnectionStatus state={connectionState} />
+                <NotificationTray
+                  notifications={notifications}
+                  onMarkRead={(id) =>
+                    setNotifications((prev) =>
+                      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+                    )
+                  }
+                  onMarkAllRead={() =>
+                    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                  }
+                  onClickNotification={(n) => {
+                    if (n.taskId) {
+                      setActiveTaskId(n.taskId);
+                      setModalOpen(true);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowStats((v) => !v)}
+                  className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60"
+                >
+                  Stats {showStats ? "▲" : "▼"}
+                </button>
+              </div>
+              <div className={cn("w-full flex flex-wrap gap-3 text-sm", showStats ? "flex" : "hidden")}>
+                <Card className="flex items-center gap-3 px-4 py-3">
+                  <div className="text-muted-foreground text-sm">Total Tasks</div>
+                  <div className="text-2xl font-semibold">{stats.total}</div>
+                </Card>
+                <Card className="flex items-center gap-3 px-4 py-3">
+                  <div className="text-muted-foreground text-sm">Done Today</div>
+                  <div className="text-2xl font-semibold">{stats.completedToday}</div>
+                </Card>
+                <Card className="flex items-center gap-3 px-4 py-3">
+                  <div className="text-muted-foreground text-sm">Active Agents</div>
+                  <div className="text-2xl font-semibold">{stats.activeAgents}</div>
+                </Card>
+                <Card className="flex items-center gap-3 px-4 py-3">
+                  <div className="text-muted-foreground text-sm">Avg Completion</div>
+                  <div className="text-2xl font-semibold">{stats.avgCompletion}h</div>
+                </Card>
+              </div>
+            </div>
+          </div>
+          {loading && (
+            <p className="text-sm text-muted-foreground">Loading mission data...</p>
+          )}
+          {error && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
+              {error}
+            </div>
+          )}
+        </div>
+      </header>
+
+      <main className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile event feed overlay */}
         {showEventFeed && (
           <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur">
@@ -883,7 +961,7 @@ export default function HomePage() {
           </div>
         )}
 
-        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-4 sm:gap-6 px-4 sm:px-6 py-4 sm:py-6 lg:grid-cols-[240px_1fr_360px]">
+        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-4 sm:gap-6 px-2 sm:px-6 py-2 sm:py-6 lg:grid-cols-[240px_1fr_360px]">
           {/* LEFT SIDEBAR - Agent Filters + Status Legend (desktop only) */}
           <aside className="hidden lg:flex h-full min-h-0 flex-col gap-6">
             {/* Agent Filters Card - flex-1 to take available space, overflow hidden */}
@@ -985,13 +1063,13 @@ export default function HomePage() {
 
           {/* CENTER - Kanban Board */}
           <section className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
-            {/* Header - fixed height */}
-            <div className="mb-4 flex flex-shrink-0 flex-wrap items-center justify-between gap-3">
+            {/* Header - desktop only (mobile uses compact header above) */}
+            <div className="hidden lg:flex mb-4 flex-shrink-0 flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   Kanban Board
                 </p>
-                <h2 className="text-xl sm:text-2xl font-semibold">Live Task Pipeline</h2>
+                <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
               </div>
               <Button onClick={handleAddTask} disabled={loading} className="min-h-[44px]">
                 Add New Task
@@ -1005,25 +1083,33 @@ export default function HomePage() {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              {/* Mobile board: rotated axis — status rows, tasks scroll horizontally */}
-              <div className="flex flex-col gap-4 lg:hidden">
+              {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
+              <div className="flex flex-col gap-2 lg:hidden">
                 {columns.map((status) => {
                   const rowTasks = filteredTasks.filter((t) => t.status === status);
                   return (
                     <div key={status}>
-                      <div className="flex items-center gap-2 mb-2 px-1">
-                        <span className={cn("text-sm font-semibold uppercase tracking-wide", columnColors[status])}>
+                      {/* Compressed row header */}
+                      <div className="flex items-center gap-2 px-2 py-1">
+                        <span className={cn("text-xs font-bold uppercase tracking-widest", columnColors[status])}>
                           {columnEmojis[status]} {columnLabels[status]}
                         </span>
-                        <span className="text-xs text-muted-foreground font-mono">{rowTasks.length}</span>
+                        <span className="text-xs text-muted-foreground">{rowTasks.length}</span>
                       </div>
-                      <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide">
+                      {/* Droppable horizontal card row */}
+                      <MobileDropRow id={status}>
                         {rowTasks.map((task) => {
                           const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
                           const priority = (task.priority || "low") as TaskPriority;
+                          const agentEmoji = agent ? getAgentEmoji(agent.name) : null;
+                          const agentInitials = agent
+                            ? agentEmoji ?? agent.name.split(" ").map((p) => p[0]).join("")
+                            : "?";
+                          const agentName = agent?.name ?? "Unassigned";
                           return (
-                            <div key={task.id} className="min-w-[260px] max-w-[85vw] flex-shrink-0">
-                              <Card
+                            <DraggableCard key={task.id} id={task.id}>
+                              <div
+                                className="min-w-[200px] max-w-[220px] flex-shrink-0 rounded-lg border border-border/60 bg-card/70 px-2.5 py-2 cursor-pointer active:opacity-70"
                                 onClick={() => { setActiveTaskId(task.id); setModalOpen(true); }}
                                 role="button"
                                 tabIndex={0}
@@ -1034,63 +1120,29 @@ export default function HomePage() {
                                     setModalOpen(true);
                                   }
                                 }}
-                                className="min-h-[44px]"
                               >
-                                <CardHeader className="space-y-2 p-4">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <h3 className="text-sm font-semibold leading-snug line-clamp-2">
-                                      <LinkifiedText text={task.title} />
-                                    </h3>
-                                    <Badge variant={priorityVariant[priority]} className="px-2 py-0.5 text-[10px] uppercase tracking-wide flex-shrink-0">
-                                      {priority}
-                                    </Badge>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    {agent ? (() => {
-                                      const emoji = getAgentEmoji(agent.name);
-                                      return (
-                                        <Avatar className={cn("h-6 w-6", roleAvatarBg[agent.role])}>
-                                          <AvatarFallback className={cn("text-[10px]", emoji ? "text-base leading-none" : roleAvatarText[agent.role])}>
-                                            {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                      );
-                                    })() : (
-                                      <Avatar className="h-6 w-6">
-                                        <AvatarFallback className="text-[10px]">?</AvatarFallback>
-                                      </Avatar>
-                                    )}
-                                    <span className="truncate">{agent?.name ?? "Unassigned"}</span>
-                                  </div>
-                                  {/* Move to status — mobile only */}
-                                  <Select
-                                    aria-label="Move to status"
-                                    value={task.status}
-                                    onChange={async (e) => {
-                                      e.stopPropagation();
-                                      const newStatus = e.target.value as TaskStatus;
-                                      if (newStatus !== task.status) {
-                                        try { await handleSaveTask(task.id, { status: newStatus }); } catch { /* noop */ }
-                                      }
-                                    }}
-                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                                    className="h-7 w-full rounded-md border-border/60 bg-muted/40 px-2 text-[11px] mt-1"
-                                  >
-                                    {columns.map((col) => (
-                                      <option key={col} value={col}>{columnLabels[col]}</option>
-                                    ))}
-                                  </Select>
-                                </CardHeader>
-                              </Card>
-                            </div>
+                                <div className="flex items-start justify-between gap-1 mb-1">
+                                  <h3 className="text-xs font-semibold leading-tight line-clamp-2">{task.title}</h3>
+                                  <Badge variant={priorityVariant[priority]} className="text-[10px] px-1.5 shrink-0">{priority}</Badge>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                  <Avatar className={cn("h-4 w-4", agent ? roleAvatarBg[agent.role] : "")}>
+                                    <AvatarFallback className={cn("text-[8px]", agentEmoji ? "text-[10px] leading-none" : (agent ? roleAvatarText[agent.role] : ""))}>
+                                      {agentInitials}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="truncate">{agentName}</span>
+                                </div>
+                              </div>
+                            </DraggableCard>
                           );
                         })}
                         {rowTasks.length === 0 && (
-                          <div className="min-w-[200px] flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border/50 rounded-xl h-20">
-                            No tasks
+                          <div className="min-w-[160px] flex items-center justify-center text-[10px] text-muted-foreground border border-dashed border-border/40 rounded-lg h-14">
+                            Empty
                           </div>
                         )}
-                      </div>
+                      </MobileDropRow>
                     </div>
                   );
                 })}

@@ -1190,6 +1190,7 @@ export default function HomePage() {
             {/* Columns Grid - flex-1 to fill remaining space, overflow hidden */}
             <DndContext
               sensors={sensors}
+              modifiers={[snapCenterToCursor]}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onDragCancel={() => setDraggingTaskId(null)}
@@ -1400,7 +1401,7 @@ export default function HomePage() {
               </div>{/* end desktop board */}
 
               {/* Ghost card while dragging */}
-              <DragOverlay modifiers={[snapCenterToCursor]}>
+              <DragOverlay>
                 {draggingTaskId ? (() => {
                   const task = tasks.find((t) => t.id === draggingTaskId);
                   const agent = task?.assignedAgent ? agentById[task.assignedAgent] : null;

@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import Database from 'better-sqlite3';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -8,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../data/mission-control.db');
+console.log(`[DB] Using database: ${dbPath}`);
 const db = new Database(dbPath);
 
 // Enable WAL mode for better concurrency

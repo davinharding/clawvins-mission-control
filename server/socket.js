@@ -5,15 +5,27 @@ export function setupWebSocket(server, app) {
   const allowedOrigins = new Set(
     [
       process.env.FRONTEND_URL,
+      process.env.TAILSCALE_ORIGIN,
       'http://localhost:9000',
       'http://localhost:3001',
+      'https://localhost:3001',
+      // Tailscale MagicDNS default — also covered by TAILSCALE_ORIGIN env var
+      'https://stagesnap-assistant.tail581fc8.ts.net',
     ].filter(Boolean)
   );
 
   const io = new Server(server, {
+    // Prefer websocket transport; polling struggles through HTTPS reverse proxies
+    transports: ['websocket', 'polling'],
     cors: {
       origin: (origin, callback) => {
+        // Allow requests with no origin (same-origin, mobile apps, Postman)
         if (!origin || allowedOrigins.has(origin)) {
+          callback(null, true);
+          return;
+        }
+        // Also allow any *.ts.net Tailscale domain
+        if (origin.endsWith('.ts.net')) {
           callback(null, true);
           return;
         }

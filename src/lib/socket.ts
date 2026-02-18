@@ -1,7 +1,22 @@
 import { io } from 'socket.io-client';
 
-// Connect to same origin (port 9000) which proxies to backend (port 3002)
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+// Derive socket server URL:
+// 1. Explicit VITE_SOCKET_URL override
+// 2. Strip trailing /api from VITE_API_URL to get the server root
+// 3. Fall back to window.location.origin (localhost dev with proxy)
+function resolveSocketUrl(): string {
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL as string;
+  }
+  const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+  if (apiUrl) {
+    // Strip /api suffix if present — socket.io lives at the server root
+    return apiUrl.replace(/\/api\/?$/, '');
+  }
+  return window.location.origin;
+}
+
+const SOCKET_URL = resolveSocketUrl();
 
 export type ConnectionState = 'connected' | 'disconnected' | 'reconnecting';
 
@@ -11,6 +26,8 @@ export function createSocket(token: string) {
   const socket = io(SOCKET_URL, {
     autoConnect: false,
     auth: { token },
+    // Prefer websocket — polling is unreliable through HTTPS reverse proxies (e.g. Tailscale)
+    transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 600,

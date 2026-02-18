@@ -1005,7 +1005,99 @@ export default function HomePage() {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 scrollbar-hide min-h-[55vh] lg:grid lg:flex-1 lg:min-h-0 lg:grid-cols-5 lg:overflow-hidden lg:pb-0">
+              {/* Mobile board: rotated axis — status rows, tasks scroll horizontally */}
+              <div className="flex flex-col gap-4 lg:hidden">
+                {columns.map((status) => {
+                  const rowTasks = filteredTasks.filter((t) => t.status === status);
+                  return (
+                    <div key={status}>
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <span className={cn("text-sm font-semibold uppercase tracking-wide", columnColors[status])}>
+                          {columnEmojis[status]} {columnLabels[status]}
+                        </span>
+                        <span className="text-xs text-muted-foreground font-mono">{rowTasks.length}</span>
+                      </div>
+                      <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide">
+                        {rowTasks.map((task) => {
+                          const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
+                          const priority = (task.priority || "low") as TaskPriority;
+                          return (
+                            <div key={task.id} className="min-w-[260px] max-w-[85vw] flex-shrink-0">
+                              <Card
+                                onClick={() => { setActiveTaskId(task.id); setModalOpen(true); }}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setActiveTaskId(task.id);
+                                    setModalOpen(true);
+                                  }
+                                }}
+                                className="min-h-[44px]"
+                              >
+                                <CardHeader className="space-y-2 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <h3 className="text-sm font-semibold leading-snug line-clamp-2">
+                                      <LinkifiedText text={task.title} />
+                                    </h3>
+                                    <Badge variant={priorityVariant[priority]} className="px-2 py-0.5 text-[10px] uppercase tracking-wide flex-shrink-0">
+                                      {priority}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    {agent ? (() => {
+                                      const emoji = getAgentEmoji(agent.name);
+                                      return (
+                                        <Avatar className={cn("h-6 w-6", roleAvatarBg[agent.role])}>
+                                          <AvatarFallback className={cn("text-[10px]", emoji ? "text-base leading-none" : roleAvatarText[agent.role])}>
+                                            {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      );
+                                    })() : (
+                                      <Avatar className="h-6 w-6">
+                                        <AvatarFallback className="text-[10px]">?</AvatarFallback>
+                                      </Avatar>
+                                    )}
+                                    <span className="truncate">{agent?.name ?? "Unassigned"}</span>
+                                  </div>
+                                  {/* Move to status — mobile only */}
+                                  <Select
+                                    aria-label="Move to status"
+                                    value={task.status}
+                                    onChange={async (e) => {
+                                      e.stopPropagation();
+                                      const newStatus = e.target.value as TaskStatus;
+                                      if (newStatus !== task.status) {
+                                        try { await handleSaveTask(task.id, { status: newStatus }); } catch { /* noop */ }
+                                      }
+                                    }}
+                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                    className="h-7 w-full rounded-md border-border/60 bg-muted/40 px-2 text-[11px] mt-1"
+                                  >
+                                    {columns.map((col) => (
+                                      <option key={col} value={col}>{columnLabels[col]}</option>
+                                    ))}
+                                  </Select>
+                                </CardHeader>
+                              </Card>
+                            </div>
+                          );
+                        })}
+                        {rowTasks.length === 0 && (
+                          <div className="min-w-[200px] flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border/50 rounded-xl h-20">
+                            No tasks
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop board: original columns grid */}
+              <div className="hidden lg:grid lg:flex-1 lg:min-h-0 lg:grid-cols-5 lg:overflow-hidden lg:gap-4">
                 {columns.map((column) => {
                   const columnTasks = sortTasks(
                     filteredTasks.filter((task) => task.status === column),
@@ -1142,7 +1234,7 @@ export default function HomePage() {
                     </KanbanColumn>
                   );
                 })}
-              </div>
+              </div>{/* end desktop board */}
 
               {/* Ghost card while dragging */}
               <DragOverlay>

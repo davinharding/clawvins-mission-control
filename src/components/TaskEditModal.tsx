@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { Agent, Comment, Task, TaskPriority, TaskStatus } from "@/lib/api";
 import { createComment, getComments } from "@/lib/api";
-import { Archive } from "lucide-react";
+import { Archive, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -177,13 +177,27 @@ export function TaskEditModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-screen sm:max-h-[90vh]">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit Task</DialogTitle>
-          <DialogDescription>Update task details and collaborate in real-time.</DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <DialogTitle>Edit Task</DialogTitle>
+              <DialogDescription>Update task details and collaborate in real-time.</DialogDescription>
+            </div>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => onOpenChange(false)}
+              className="flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </DialogHeader>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        {/* Scrollable body — grows to fill, scrolls independently of footer */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Title
@@ -205,6 +219,7 @@ export function TaskEditModal({
               onChange={(event) => setDescription(event.target.value)}
               maxLength={2000}
               placeholder="Describe the mission details..."
+              className="resize-y min-h-[80px] max-h-[200px] overflow-y-auto"
             />
             {/https?:\/\//.test(description) && (
               <p className="rounded-md bg-muted/40 px-3 py-2 text-sm leading-relaxed break-words">
@@ -276,8 +291,9 @@ export function TaskEditModal({
           posting={postingComment}
           onPost={handlePostComment}
         />
+        </div>{/* end scrollable body */}
 
-        <DialogFooter className="mt-6">
+        <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
             Cancel
           </Button>

@@ -48,6 +48,7 @@ import { KanbanColumn } from "@/components/KanbanColumn";
 import { DraggableCard } from "@/components/DraggableCard";
 import { ArchivePanel } from "@/components/ArchivePanel";
 import { LinkifiedText } from "@/components/LinkifiedText";
+import { GlobalSearch } from "@/components/GlobalSearch";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -696,6 +697,12 @@ export default function HomePage() {
           </div>
           <div className="flex flex-col items-start gap-3 text-sm lg:items-end">
             <div className="flex items-center gap-2">
+              <GlobalSearch
+                onOpenTask={(taskId) => {
+                  setActiveTaskId(taskId);
+                  setModalOpen(true);
+                }}
+              />
               <ConnectionStatus state={connectionState} />
               <NotificationTray
                 notifications={notifications}

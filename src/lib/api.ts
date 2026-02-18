@@ -178,6 +178,24 @@ export async function getComments(taskId: string) {
   });
 }
 
+export type SearchResult = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: TaskStatus;
+  assignedAgent?: string | null;
+  priority?: TaskPriority | null;
+  matchType: 'task' | 'comment';
+  snippet?: string | null;
+};
+
+export async function searchTasks(query: string, limit = 20): Promise<{ results: SearchResult[]; query: string }> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  return request<{ results: SearchResult[]; query: string }>(`/search?${params}`, {
+    headers: authHeaders(),
+  });
+}
+
 export async function createComment(
   taskId: string,
   text: string,

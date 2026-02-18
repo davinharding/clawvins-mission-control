@@ -234,8 +234,8 @@ function MobileDropRow({ id, children }: { id: string; children: React.ReactNode
     <div
       ref={setNodeRef}
       className={cn(
-        "flex overflow-x-auto gap-2 pb-2 scrollbar-hide rounded-lg transition-colors",
-        isOver && "bg-primary/5 ring-1 ring-primary/20"
+        "flex overflow-x-auto gap-3 pb-2 scrollbar-hide min-h-[80px] rounded-lg transition-colors",
+        isOver && "bg-primary/5 ring-1 ring-primary/30"
       )}
     >
       {children}
@@ -309,7 +309,7 @@ export default function HomePage() {
       activationConstraint: { distance: 5 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 250, tolerance: 5 },
+      activationConstraint: { delay: 300, tolerance: 8 },
     }),
     useSensor(KeyboardSensor)
   );
@@ -567,7 +567,8 @@ export default function HomePage() {
     const { active, over } = event;
     if (!over) return;
 
-    const taskId = active.id as string;
+    // Strip mobile- prefix from both active and over IDs
+    const taskId = String(active.id).replace(/^mobile-/, '');
 
     // Handle archive drop target first
     if (over.id === ARCHIVE_DROP_ID) {
@@ -577,7 +578,7 @@ export default function HomePage() {
 
     // Handle both desktop column IDs and mobile row IDs (prefixed with "mobile-")
     const overId = String(over.id);
-    const newStatus = (overId.startsWith("mobile-") ? overId.slice(7) : overId) as TaskStatus;
+    const newStatus = overId.replace(/^mobile-/, '') as TaskStatus;
     const existing = tasks.find((t) => t.id === taskId);
     if (!existing || existing.status === newStatus) return;
 
@@ -1082,6 +1083,7 @@ export default function HomePage() {
               sensors={sensors}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
+              onDragCancel={() => setDraggingTaskId(null)}
             >
               {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
               <div className="flex flex-col gap-2 lg:hidden">
@@ -1138,8 +1140,8 @@ export default function HomePage() {
                           );
                         })}
                         {rowTasks.length === 0 && (
-                          <div className="min-w-[160px] flex items-center justify-center text-[10px] text-muted-foreground border border-dashed border-border/40 rounded-lg h-14">
-                            Empty
+                          <div className="min-w-[160px] flex items-center justify-center text-[10px] text-muted-foreground border border-dashed border-border/40 rounded-lg h-16 flex-shrink-0">
+                            Drop here
                           </div>
                         )}
                       </MobileDropRow>

@@ -68,8 +68,14 @@ export function TaskEditModal({
   }, [task]);
 
   React.useEffect(() => {
-    if (!open || !task) return;
+    if (!open || !task) {
+      // Clear comments when modal closes so they don't bleed into the next task
+      if (!open) setComments([]);
+      return;
+    }
     let mounted = true;
+    // Immediately clear stale comments from any previously viewed task
+    setComments([]);
     setLoadingComments(true);
     getComments(task.id)
       .then((response) => {
@@ -89,9 +95,13 @@ export function TaskEditModal({
       });
 
     return () => {
+      // Cancel any in-flight fetch when task changes (handles rapid switching)
       mounted = false;
     };
-  }, [open, task, notify]);
+  // Use task.id (not the full task object) so the effect only re-runs on task
+  // identity changes, not on metadata-only updates to the same task.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, task?.id, notify]);
 
   React.useEffect(() => {
     if (!incomingComment || !task) return;

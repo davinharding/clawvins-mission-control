@@ -46,6 +46,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { DraggableCard } from "@/components/DraggableCard";
 import { ArchivePanel } from "@/components/ArchivePanel";
@@ -1291,7 +1292,7 @@ export default function HomePage() {
               </div>{/* end desktop board */}
 
               {/* Ghost card while dragging */}
-              <DragOverlay>
+              <DragOverlay modifiers={[snapCenterToCursor]}>
                 {draggingTaskId ? (() => {
                   const task = tasks.find((t) => t.id === draggingTaskId);
                   const agent = task?.assignedAgent ? agentById[task.assignedAgent] : null;

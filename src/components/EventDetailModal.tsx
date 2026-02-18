@@ -31,7 +31,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[90vh]"
+        className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -53,7 +53,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="space-y-4 px-6 py-5 overflow-y-auto">
+        <div className="space-y-4 px-6 py-5">
           {/* Channel */}
           {detail?.channelName && (
             <div>
@@ -70,7 +70,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
               <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
                 {event.type === "message_received" ? "Message" : "Response"}
               </p>
-              <p className="rounded-lg bg-muted/60 p-3 text-sm leading-relaxed whitespace-pre-wrap break-words">
+              <p className="rounded-lg bg-muted/60 p-3 text-sm leading-relaxed whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto">
                 <LinkifiedText text={detail.content} />
               </p>
             </div>
@@ -82,7 +82,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
               <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
                 Event
               </p>
-              <p className="rounded-lg bg-muted/60 p-3 text-sm leading-relaxed">
+              <p className="rounded-lg bg-muted/60 p-3 text-sm leading-relaxed whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto">
                 <LinkifiedText text={event.message} />
               </p>
             </div>

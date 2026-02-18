@@ -196,17 +196,14 @@ export async function searchTasks(query: string, limit = 20): Promise<{ results:
   });
 }
 
-export async function createComment(
-  taskId: string,
-  text: string,
-  author?: { authorId?: string; authorName?: string }
-) {
+export async function createComment(taskId: string, text: string) {
+  // Author attribution is determined server-side from the auth token — do not send author fields
   return request<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
-    body: JSON.stringify({ text, ...author }),
+    body: JSON.stringify({ text }),
   });
 }

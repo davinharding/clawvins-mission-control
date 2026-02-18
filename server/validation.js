@@ -50,8 +50,7 @@ const schemas = {
   }),
   commentCreate: z.object({
     text: z.string().min(1).max(1000),
-    authorId: z.string().optional(),
-    authorName: z.string().optional(),
+    // authorId and authorName are intentionally excluded — server determines attribution from auth token
   }),
 };
 

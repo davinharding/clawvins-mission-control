@@ -35,17 +35,19 @@ router.post('/', validateBody(schemas.commentCreate), (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
+    // Attribution is enforced server-side — never trust req.body for author info
+    const author = req.agent ?? req.user;
     const comment = createComment({
       taskId: req.params.taskId,
-      authorId: req.body.authorId || req.user.id,
-      authorName: req.body.authorName || req.user.name,
+      authorId: author.id,
+      authorName: author.name,
       text: req.body.text,
     });
 
     const event = createEvent({
       type: 'comment_created',
-      message: `${req.user.name} commented on task: ${task.title}`,
-      agentId: req.user.id,
+      message: `${author.name} commented on task: ${task.title}`,
+      agentId: author.id,
       taskId: task.id,
     });
 

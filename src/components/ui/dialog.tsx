@@ -48,7 +48,7 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center sm:px-4">
       <button
         type="button"
         aria-label="Close dialog"
@@ -59,7 +59,7 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative z-10 w-full max-w-3xl rounded-2xl border border-border/70 bg-card/95 p-6 shadow-2xl backdrop-blur",
+          "relative z-10 w-full sm:max-w-3xl rounded-none sm:rounded-2xl border-0 sm:border border-border/70 bg-card/95 p-4 sm:p-6 shadow-2xl backdrop-blur h-screen sm:h-auto overflow-y-auto",
           className
         )}
         {...props}

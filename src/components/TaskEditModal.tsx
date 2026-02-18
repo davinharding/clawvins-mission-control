@@ -177,14 +177,14 @@ export function TaskEditModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-screen sm:max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Edit Task</DialogTitle>
           <DialogDescription>Update task details and collaborate in real-time.</DialogDescription>
         </DialogHeader>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 md:col-span-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Title
             </label>
@@ -193,9 +193,10 @@ export function TaskEditModal({
               onChange={(event) => setTitle(event.target.value)}
               maxLength={200}
               placeholder="Task title"
+              className="w-full"
             />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-2 sm:col-span-2">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Description
             </label>
@@ -215,7 +216,7 @@ export function TaskEditModal({
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Priority
             </label>
-            <Select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
+            <Select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)} className="w-full min-h-[44px]">
               {priorityOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -227,7 +228,7 @@ export function TaskEditModal({
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Status
             </label>
-            <Select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>
+            <Select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)} className="w-full min-h-[44px]">
               {statusOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -242,6 +243,7 @@ export function TaskEditModal({
             <Select
               value={assignedAgent}
               onChange={(event) => setAssignedAgent(event.target.value)}
+              className="w-full min-h-[44px]"
             >
               <option value="">Unassigned</option>
               {agents.map((agent) => (
@@ -259,6 +261,7 @@ export function TaskEditModal({
               value={tagsInput}
               onChange={(event) => setTagsInput(event.target.value)}
               placeholder="infra, urgent, api"
+              className="w-full"
             />
             <p className="text-xs text-muted-foreground">Comma-separated tags</p>
           </div>

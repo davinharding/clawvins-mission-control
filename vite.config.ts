@@ -14,5 +14,11 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3001,
+    allowedHosts: ['stagesnap-assistant.tail581fc8.ts.net'],
+  },
+  preview: {
+    host: '0.0.0.0',
+    port: 3001,
+    allowedHosts: ['stagesnap-assistant.tail581fc8.ts.net'],
   },
 })

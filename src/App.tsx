@@ -259,6 +259,8 @@ const sortTasks = (items: Task[], sort: ColumnSort) => {
 export default function HomePage() {
   const [selectedRole, setSelectedRole] = React.useState<AgentRole | "All">("All");
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+  const [showStats, setShowStats] = React.useState(false);
+  const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [events, setEvents] = React.useState<EventItem[]>([]);
@@ -686,16 +688,16 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex flex-col gap-6 border-b border-border/60 bg-card/60 px-6 py-6 backdrop-blur">
+      <header className="flex flex-col gap-4 border-b border-border/60 bg-card/60 px-4 sm:px-6 py-4 sm:py-6 backdrop-blur">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               Mission Control v2
             </p>
-            <h1 className="text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
           </div>
           <div className="flex flex-col items-start gap-3 text-sm lg:items-end">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <ConnectionStatus state={connectionState} />
               <NotificationTray
                 notifications={notifications}
@@ -714,23 +716,44 @@ export default function HomePage() {
                   }
                 }}
               />
+              {/* Mobile toggle buttons */}
+              <button
+                type="button"
+                onClick={() => setShowStats((v) => !v)}
+                className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold sm:hidden transition hover:bg-muted/60"
+              >
+                Stats {showStats ? "▲" : "▼"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEventFeed((v) => !v)}
+                className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold lg:hidden transition hover:bg-muted/60"
+              >
+                ⚡ Feed
+              </button>
             </div>
-            <div className="flex flex-wrap gap-3 text-sm">
-              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground">Total Tasks</div>
-                <div className="text-2xl font-semibold">{stats.total}</div>
+            {/* Stat cards: 2x2 grid on mobile, flex on sm+ */}
+            <div className={cn(
+              "w-full text-sm",
+              showStats
+                ? "grid grid-cols-2 gap-3 sm:flex sm:flex-wrap"
+                : "hidden sm:flex sm:flex-wrap sm:gap-3"
+            )}>
+              <Card className="flex items-center gap-3 px-4 py-3">
+                <div className="text-muted-foreground text-xs sm:text-sm">Total Tasks</div>
+                <div className="text-xl sm:text-2xl font-semibold">{stats.total}</div>
               </Card>
-              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground">Completed Today</div>
-                <div className="text-2xl font-semibold">{stats.completedToday}</div>
+              <Card className="flex items-center gap-3 px-4 py-3">
+                <div className="text-muted-foreground text-xs sm:text-sm">Done Today</div>
+                <div className="text-xl sm:text-2xl font-semibold">{stats.completedToday}</div>
               </Card>
-              <Card className="flex min-w-[160px] items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground">Active Agents</div>
-                <div className="text-2xl font-semibold">{stats.activeAgents}</div>
+              <Card className="flex items-center gap-3 px-4 py-3">
+                <div className="text-muted-foreground text-xs sm:text-sm">Active Agents</div>
+                <div className="text-xl sm:text-2xl font-semibold">{stats.activeAgents}</div>
               </Card>
-              <Card className="flex min-w-[200px] items-center gap-3 px-4 py-3">
-                <div className="text-muted-foreground">Avg Completion</div>
-                <div className="text-2xl font-semibold">{stats.avgCompletion}h</div>
+              <Card className="flex items-center gap-3 px-4 py-3">
+                <div className="text-muted-foreground text-xs sm:text-sm">Avg Completion</div>
+                <div className="text-xl sm:text-2xl font-semibold">{stats.avgCompletion}h</div>
               </Card>
             </div>
           </div>
@@ -746,9 +769,123 @@ export default function HomePage() {
       </header>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-6 px-6 py-6 md:grid-cols-[1fr_300px] lg:grid-cols-[240px_1fr_360px]">
-          {/* LEFT SIDEBAR - Agent Filters + Status Legend */}
-          <aside className="flex h-full min-h-0 flex-col gap-6 md:hidden lg:flex">
+        {/* Mobile-only: horizontal scrollable agent pills */}
+        <div className="lg:hidden flex-shrink-0 border-b border-border/60 bg-card/40">
+          <div className="flex gap-2 overflow-x-auto px-4 py-2 scrollbar-hide">
+            {/* Role filter pills */}
+            {roles.map((role) => (
+              <button
+                key={role.value}
+                type="button"
+                onClick={() => {
+                  setSelectedRole(role.value as AgentRole | "All");
+                  setSelectedAgentId(null);
+                }}
+                className={cn(
+                  "flex-shrink-0 flex items-center rounded-full border px-3 text-xs font-semibold transition min-h-[36px]",
+                  selectedRole === role.value
+                    ? "border-primary/60 bg-primary/10 text-primary"
+                    : "border-border/60 hover:bg-muted/60"
+                )}
+              >
+                {role.label}
+              </button>
+            ))}
+            <div className="flex-shrink-0 w-px bg-border/60 self-stretch my-1" />
+            {/* Agent pills */}
+            {visibleAgents.map((agent) => {
+              const emoji = getAgentEmoji(agent.name);
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedAgentId(
+                      agent.id === selectedAgentId ? null : agent.id
+                    )
+                  }
+                  className={cn(
+                    "flex-shrink-0 flex items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition min-h-[36px]",
+                    selectedAgentId === agent.id
+                      ? "border-primary/60 bg-primary/10 text-primary"
+                      : "border-border/60 hover:bg-muted/60"
+                  )}
+                >
+                  <span>{emoji ?? agent.name[0]}</span>
+                  <span>{agent.name.split(" ")[0]}</span>
+                  <span
+                    className={cn(
+                      "h-2 w-2 rounded-full flex-shrink-0",
+                      statusColor[agent.status]
+                    )}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Mobile event feed overlay */}
+        {showEventFeed && (
+          <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur">
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Live Feed</p>
+                <h3 className="text-lg font-semibold">Agent Events</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEventFeed(false)}
+                className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg border border-border/70 text-muted-foreground hover:bg-muted/60 transition"
+                aria-label="Close event feed"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-4">
+                {events.map((event, index) => {
+                  const agent = event.agentId ? agentById[event.agentId] : null;
+                  const isNew = index === 0;
+                  const icon = eventIcon[event.type] ?? "⚡";
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => { setSelectedEvent(event); setShowEventFeed(false); }}
+                      className={cn(
+                        "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
+                        isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
+                      )}
+                    >
+                      <span className="text-base flex-shrink-0 pt-0.5">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold truncate">{agent?.name ?? "System"}</p>
+                          {event.detail?.channelName && event.detail.channelName !== "unknown" && (
+                            <span className="text-[10px] text-muted-foreground font-mono truncate">
+                              {event.detail.channelName}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          <LinkifiedText text={event.message} />
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+                        {formatTime(event.timestamp)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-4 sm:gap-6 px-4 sm:px-6 py-4 sm:py-6 lg:grid-cols-[240px_1fr_360px]">
+          {/* LEFT SIDEBAR - Agent Filters + Status Legend (desktop only) */}
+          <aside className="hidden lg:flex h-full min-h-0 flex-col gap-6">
             {/* Agent Filters Card - flex-1 to take available space, overflow hidden */}
             <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
               <div className="flex-shrink-0 space-y-3 p-6">
@@ -847,16 +984,16 @@ export default function HomePage() {
           </aside>
 
           {/* CENTER - Kanban Board */}
-          <section className="flex h-full min-h-0 flex-col overflow-hidden">
+          <section className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
             {/* Header - fixed height */}
             <div className="mb-4 flex flex-shrink-0 flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   Kanban Board
                 </p>
-                <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
+                <h2 className="text-xl sm:text-2xl font-semibold">Live Task Pipeline</h2>
               </div>
-              <Button onClick={handleAddTask} disabled={loading}>
+              <Button onClick={handleAddTask} disabled={loading} className="min-h-[44px]">
                 Add New Task
               </Button>
             </div>
@@ -868,7 +1005,7 @@ export default function HomePage() {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-hidden sm:grid-cols-2 lg:grid-cols-5">
+              <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 scrollbar-hide min-h-[55vh] lg:grid lg:flex-1 lg:min-h-0 lg:grid-cols-5 lg:overflow-hidden lg:pb-0">
                 {columns.map((column) => {
                   const columnTasks = sortTasks(
                     filteredTasks.filter((task) => task.status === column),
@@ -879,7 +1016,8 @@ export default function HomePage() {
                       key={column}
                       id={column}
                       className={cn(
-                        "flex-col min-h-0 overflow-hidden",
+                        "min-w-[85vw] snap-start flex-shrink-0 min-h-[50vh]",
+                        "lg:min-w-0 lg:flex-shrink lg:min-h-0 lg:overflow-hidden",
                         columnBg[column]
                       )}
                     >
@@ -938,6 +1076,7 @@ export default function HomePage() {
                                     }}
                                     role="button"
                                     tabIndex={0}
+                                    className="min-h-[44px]"
                                   >
                                     <CardHeader className="space-y-2 p-4">
                                       <div className="flex items-start justify-between gap-3">
@@ -1060,8 +1199,8 @@ export default function HomePage() {
             </DndContext>
           </section>
 
-          {/* RIGHT SIDEBAR - Event Feed */}
-          <aside className="flex h-full min-h-0 flex-col">
+          {/* RIGHT SIDEBAR - Event Feed (desktop only; mobile uses overlay) */}
+          <aside className="hidden lg:flex h-full min-h-0 flex-col">
             <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
               <div className="flex-shrink-0 p-6">
                 <div className="flex items-center justify-between">
@@ -1112,7 +1251,7 @@ export default function HomePage() {
                         data-testid="event-item"
                         onClick={() => setSelectedEvent(event)}
                         className={cn(
-                          "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60",
+                          "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
                           isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
                         )}
                       >

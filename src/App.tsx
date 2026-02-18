@@ -306,6 +306,13 @@ export default function HomePage() {
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
 
+  // Login form state
+  const [showLogin, setShowLogin] = React.useState(false);
+  const [loginUsername, setLoginUsername] = React.useState("");
+  const [loginPassword, setLoginPassword] = React.useState("");
+  const [loginError, setLoginError] = React.useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = React.useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },
@@ -345,12 +352,9 @@ export default function HomePage() {
       try {
         let activeToken = getToken();
         if (!activeToken) {
-          const username = import.meta.env.VITE_DAVIN_USERNAME || import.meta.env.VITE_ADMIN_USERNAME || "davin";
-          const password = import.meta.env.VITE_DAVIN_PASSWORD || import.meta.env.VITE_ADMIN_PASSWORD || "REDACTED_PASSWORD";
-          const response = await login(username, password);
-          setToken(response.token);
-          setTokenState(response.token);
-          activeToken = response.token;
+          setShowLogin(true);
+          setLoading(false);
+          return;
         } else {
           setTokenState(activeToken);
         }
@@ -560,6 +564,36 @@ export default function HomePage() {
     };
   }, [agents, tasks]);
 
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    setLoginLoading(true);
+    try {
+      const response = await login(loginUsername, loginPassword);
+      setToken(response.token);
+      setTokenState(response.token);
+      setShowLogin(false);
+      setLoginPassword("");
+      // Re-trigger bootstrap by calling it directly
+      setLoading(true);
+      const [tasksResponse, agentsResponse, eventsResponse, archivedResponse] = await Promise.all([
+        getTasks(),
+        getAgents(),
+        getEvents(),
+        getArchivedTasks(),
+      ]);
+      setTasks(tasksResponse.tasks);
+      setAgents(agentsResponse.agents);
+      setEvents(mergeEvents([], eventsResponse.events));
+      setArchivedTasks(archivedResponse.tasks);
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : "Invalid username or password");
+    } finally {
+      setLoginLoading(false);
+      setLoading(false);
+    }
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     setDraggingTaskId(event.active.id as string);
   };
@@ -712,6 +746,64 @@ export default function HomePage() {
     () => tasks.find((task) => task.id === activeTaskId) ?? null,
     [tasks, activeTaskId]
   );
+
+  if (showLogin) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-background">
+        <div className="w-full max-w-sm rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl backdrop-blur">
+          <div className="mb-6 text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Mission Control</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Sign in to continue</p>
+          </div>
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="mc-username" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Username
+              </label>
+              <input
+                id="mc-username"
+                type="text"
+                autoComplete="username"
+                autoFocus
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                disabled={loginLoading}
+                placeholder="username"
+                className="rounded-md border border-border/70 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:opacity-50"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="mc-password" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Password
+              </label>
+              <input
+                id="mc-password"
+                type="password"
+                autoComplete="current-password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                disabled={loginLoading}
+                placeholder="••••••••"
+                className="rounded-md border border-border/70 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:opacity-50"
+              />
+            </div>
+            {loginError && (
+              <p className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-xs text-destructive">
+                {loginError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={loginLoading || !loginUsername || !loginPassword}
+              className="mt-1 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loginLoading ? "Signing in…" : "Sign In"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col">

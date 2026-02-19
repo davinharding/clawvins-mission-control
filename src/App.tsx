@@ -875,9 +875,10 @@ export default function HomePage() {
               </div>
             </div>
           )}
-          {/* Global Search — mobile */}
+          {/* Global Search — mobile (compact icon-only button) */}
           <div className="px-3 pb-1.5">
             <GlobalSearch
+              compact={true}
               onOpenTask={(taskId) => {
                 setActiveTaskId(taskId);
                 setModalOpen(true);

@@ -80,11 +80,12 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 
 export type GlobalSearchProps = {
   onOpenTask: (taskId: string) => void;
+  compact?: boolean;
 };
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function GlobalSearch({ onOpenTask }: GlobalSearchProps) {
+export function GlobalSearch({ onOpenTask, compact = false }: GlobalSearchProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [results, setResults] = React.useState<SearchResult[]>([]);
@@ -199,24 +200,40 @@ export function GlobalSearch({ onOpenTask }: GlobalSearchProps) {
 
   return (
     <>
-      {/* Search trigger button — rendered in place (App.tsx adds it to header) */}
-      <button
-        type="button"
-        id="global-search-trigger"
-        aria-label="Search tasks (Cmd+K)"
-        onClick={() => setOpen(true)}
-        className={cn(
-          "flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5",
-          "text-sm text-muted-foreground transition hover:bg-muted/70 hover:text-foreground",
-          "min-w-[160px]"
-        )}
-      >
-        <span className="text-base">🔍</span>
-        <span className="flex-1 text-left">Search tasks…</span>
-        <kbd className="rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-          ⌘K
-        </kbd>
-      </button>
+      {/* Search trigger button — compact (icon-only) on mobile, full bar on desktop */}
+      {compact ? (
+        <button
+          type="button"
+          id="global-search-trigger"
+          aria-label="Search tasks"
+          onClick={() => setOpen(true)}
+          className={cn(
+            "flex items-center justify-center rounded-lg border border-border/60 bg-muted/40",
+            "text-muted-foreground transition hover:bg-muted/70 hover:text-foreground",
+            "min-w-[44px] min-h-[44px] w-11 h-11"
+          )}
+        >
+          <span className="text-lg">🔍</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          id="global-search-trigger"
+          aria-label="Search tasks (Cmd+K)"
+          onClick={() => setOpen(true)}
+          className={cn(
+            "flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5",
+            "text-sm text-muted-foreground transition hover:bg-muted/70 hover:text-foreground",
+            "min-w-[160px]"
+          )}
+        >
+          <span className="text-base">🔍</span>
+          <span className="flex-1 text-left">Search tasks…</span>
+          <kbd className="rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+            ⌘K
+          </kbd>
+        </button>
+      )}
 
       {/* Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>

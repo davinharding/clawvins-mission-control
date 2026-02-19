@@ -52,6 +52,7 @@ import { DraggableCard } from "@/components/DraggableCard";
 import { ArchivePanel } from "@/components/ArchivePanel";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { BulkActionBar } from "@/components/BulkActionBar";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -302,6 +303,11 @@ export default function HomePage() {
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = React.useState<EventItem | null>(null);
+
+  // Multi-select state
+  const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = React.useState<string | null>(null);
+  const isSelecting = selectedTaskIds.size > 0;
   const [archivedTasks, setArchivedTasks] = React.useState<Task[]>([]);
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
@@ -488,6 +494,13 @@ export default function HomePage() {
       const currentTaskId = activeTaskIdRef.current;
       setActiveTaskId((prev) => (prev === payload.taskId ? null : prev));
       setModalOpen((prev) => (currentTaskId === payload.taskId ? false : prev));
+      // Remove from bulk selection if it was selected
+      setSelectedTaskIds((prev) => {
+        if (!prev.has(payload.taskId)) return prev;
+        const next = new Set(prev);
+        next.delete(payload.taskId);
+        return next;
+      });
     });
 
     socket.on("agent.status_changed", (payload: AgentPayload) => {
@@ -772,6 +785,108 @@ export default function HomePage() {
       });
     }
   };
+
+  // ── Bulk-selection handlers ──────────────────────────────────────────────────
+
+  const handleLongPressTask = React.useCallback((taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
+    setLastSelectedId(taskId);
+  }, []);
+
+  const handleSelectTask = React.useCallback(
+    (taskId: string, shiftKey?: boolean, columnTasks?: Task[]) => {
+      if (shiftKey && lastSelectedId && columnTasks) {
+        const ids = columnTasks.map((t) => t.id);
+        const fromIdx = ids.indexOf(lastSelectedId);
+        const toIdx = ids.indexOf(taskId);
+        if (fromIdx !== -1 && toIdx !== -1) {
+          const [s, e] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+          setSelectedTaskIds((prev) => {
+            const next = new Set(prev);
+            for (let i = s; i <= e; i++) next.add(ids[i]);
+            return next;
+          });
+          return;
+        }
+      }
+      setSelectedTaskIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(taskId)) next.delete(taskId);
+        else next.add(taskId);
+        return next;
+      });
+      setLastSelectedId(taskId);
+    },
+    [lastSelectedId]
+  );
+
+  const handleClearSelection = React.useCallback(() => {
+    setSelectedTaskIds(new Set());
+    setLastSelectedId(null);
+  }, []);
+
+  const handleBulkMoveTo = React.useCallback(
+    async (newStatus: TaskStatus) => {
+      const ids = Array.from(selectedTaskIds);
+      if (!ids.length) return;
+      handleClearSelection();
+      setTasks((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, status: newStatus } : t)));
+      try {
+        await Promise.all(ids.map((id) => updateTask(id, { status: newStatus })));
+      } catch (err) {
+        notify({
+          title: "Bulk move failed",
+          description: err instanceof Error ? err.message : "Unexpected error",
+          variant: "error",
+        });
+        try { const r = await getTasks(); setTasks(r.tasks); } catch { /* ignore */ }
+      }
+    },
+    [selectedTaskIds, handleClearSelection, notify]
+  );
+
+  const handleBulkArchive = React.useCallback(async () => {
+    const ids = Array.from(selectedTaskIds);
+    if (!ids.length) return;
+    const toArchive = tasks.filter((t) => ids.includes(t.id));
+    handleClearSelection();
+    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)));
+    try {
+      const results = await Promise.all(ids.map((id) => updateTask(id, { status: "archived" })));
+      setArchivedTasks((prev) => [...results.map((r) => r.task), ...prev]);
+    } catch (err) {
+      notify({
+        title: "Bulk archive failed",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
+      setTasks((prev) => [...toArchive, ...prev]);
+      try { const r = await getTasks(); setTasks(r.tasks); } catch { /* ignore */ }
+    }
+  }, [selectedTaskIds, tasks, handleClearSelection, notify]);
+
+  const handleBulkDelete = React.useCallback(async () => {
+    const ids = Array.from(selectedTaskIds);
+    if (!ids.length) return;
+    handleClearSelection();
+    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)));
+    try {
+      await Promise.all(ids.map((id) => deleteTask(id)));
+    } catch (err) {
+      notify({
+        title: "Bulk delete failed",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
+      try { const r = await getTasks(); setTasks(r.tasks); } catch { /* ignore */ }
+    }
+  }, [selectedTaskIds, handleClearSelection, notify]);
+
+  // ────────────────────────────────────────────────────────────────────────────
 
   const agentById = React.useMemo(() => {
     return agents.reduce<Record<string, Agent>>((acc, agent) => {
@@ -1300,10 +1415,17 @@ export default function HomePage() {
                             : "?";
                           const agentName = agent?.name ?? "Unassigned";
                           return (
-                            <DraggableCard key={task.id} id={task.id}>
+                            <DraggableCard
+                              key={task.id}
+                              id={task.id}
+                              isSelecting={isSelecting}
+                              isSelected={selectedTaskIds.has(task.id)}
+                              onSelect={(shiftKey) => handleSelectTask(task.id, shiftKey, rowTasks)}
+                              onLongPress={() => handleLongPressTask(task.id)}
+                            >
                               <div
                                 className="min-w-[200px] max-w-[220px] flex-shrink-0 rounded-lg border border-border/60 bg-card/70 px-2.5 py-2 cursor-pointer active:opacity-70"
-                                onClick={() => { setActiveTaskId(task.id); setModalOpen(true); }}
+                                onClick={() => { if (!isSelecting) { setActiveTaskId(task.id); setModalOpen(true); } }}
                                 role="button"
                                 tabIndex={0}
                                 onKeyDown={(e) => {
@@ -1398,14 +1520,23 @@ export default function HomePage() {
                               const priority = (task.priority || "low") as TaskPriority;
                               const timestamp = task.updatedAt ?? task.createdAt;
                               return (
-                                <DraggableCard key={task.id} id={task.id}>
+                                <DraggableCard
+                                  key={task.id}
+                                  id={task.id}
+                                  isSelecting={isSelecting}
+                                  isSelected={selectedTaskIds.has(task.id)}
+                                  onSelect={(shiftKey) => handleSelectTask(task.id, shiftKey, columnTasks)}
+                                  onLongPress={() => handleLongPressTask(task.id)}
+                                >
                                   <Card
                                     onClick={() => {
-                                      setActiveTaskId(task.id);
-                                      setModalOpen(true);
+                                      if (!isSelecting) {
+                                        setActiveTaskId(task.id);
+                                        setModalOpen(true);
+                                      }
                                     }}
                                     onKeyDown={(event) => {
-                                      if (event.key === "Enter" || event.key === " ") {
+                                      if (!isSelecting && (event.key === "Enter" || event.key === " ")) {
                                         event.preventDefault();
                                         setActiveTaskId(task.id);
                                         setModalOpen(true);
@@ -1533,6 +1664,9 @@ export default function HomePage() {
                   isLoading={loading}
                 />
               </div>
+
+              {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
+              {isSelecting && <div className="h-20 flex-shrink-0" />}
             </DndContext>
           </section>
 
@@ -1639,6 +1773,14 @@ export default function HomePage() {
         event={selectedEvent}
         agentName={selectedEvent?.agentId ? agentById[selectedEvent.agentId]?.name : undefined}
         onClose={() => setSelectedEvent(null)}
+      />
+
+      <BulkActionBar
+        selectedCount={selectedTaskIds.size}
+        onClear={handleClearSelection}
+        onMoveTo={handleBulkMoveTo}
+        onArchive={handleBulkArchive}
+        onDelete={handleBulkDelete}
       />
     </div>
   );

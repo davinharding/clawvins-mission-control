@@ -845,6 +845,13 @@ export default function HomePage() {
             >
               ⚡ Feed
             </button>
+            <GlobalSearch
+              compact={true}
+              onOpenTask={(taskId) => {
+                setActiveTaskId(taskId);
+                setModalOpen(true);
+              }}
+            />
             <button
               type="button"
               onClick={handleAddTask}
@@ -875,16 +882,6 @@ export default function HomePage() {
               </div>
             </div>
           )}
-          {/* Global Search — mobile (compact icon-only button) */}
-          <div className="px-3 pb-1.5">
-            <GlobalSearch
-              compact={true}
-              onOpenTask={(taskId) => {
-                setActiveTaskId(taskId);
-                setModalOpen(true);
-              }}
-            />
-          </div>
           {/* Row 2: Agent filter pills — horizontally scrollable */}
           <div className="flex gap-1.5 overflow-x-auto px-3 py-1 scrollbar-hide">
             {roles.map((role) => (

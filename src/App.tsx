@@ -1171,7 +1171,10 @@ export default function HomePage() {
         {/* Mobile event feed overlay */}
         {showEventFeed && (
           <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur">
-            <div className="flex flex-shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
+            <div 
+              className="flex flex-shrink-0 items-center justify-between border-b border-border/60 px-4 py-3"
+              style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}
+            >
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Live Feed</p>
                 <h3 className="text-lg font-semibold">Agent Events</h3>

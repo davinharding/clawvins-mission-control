@@ -48,7 +48,13 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center sm:px-4">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center sm:px-4"
+      style={{
+        paddingTop: "max(0px, env(safe-area-inset-top))",
+        paddingBottom: "max(0px, env(safe-area-inset-bottom))"
+      }}
+    >
       <button
         type="button"
         aria-label="Close dialog"

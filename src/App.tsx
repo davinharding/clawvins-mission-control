@@ -330,7 +330,7 @@ export default function HomePage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
+      activationConstraint: { distance: 10 },
     }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 300, tolerance: 8 },

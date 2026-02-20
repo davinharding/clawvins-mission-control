@@ -239,6 +239,10 @@ const taskQueries = {
     SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
     FROM tasks t WHERE t.assigned_agent = ? AND t.status != 'archived' ORDER BY t.created_at DESC
   `),
+  getByStatusAndAgent: db.prepare(`
+    SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
+    FROM tasks t WHERE t.status = ? AND t.assigned_agent = ? ORDER BY t.created_at DESC
+  `),
   getById: db.prepare(`
     SELECT t.*, (SELECT COUNT(*) FROM comments c WHERE c.task_id = t.id) as comment_count
     FROM tasks t WHERE t.id = ?
@@ -304,11 +308,15 @@ const commentQueries = {
 
 // Helper functions
 export function getAllTasks(filters = {}) {
+  // Handle combined filters first
+  if (filters.status && filters.assignedAgent) {
+    return taskQueries.getByStatusAndAgent.all(filters.status, filters.assignedAgent);
+  }
   if (filters.status) {
     return taskQueries.getByStatus.all(filters.status);
   }
-  if (filters.agent) {
-    return taskQueries.getByAgent.all(filters.agent);
+  if (filters.assignedAgent) {
+    return taskQueries.getByAgent.all(filters.assignedAgent);
   }
   return taskQueries.getAll.all();
 }

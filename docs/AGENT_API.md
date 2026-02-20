@@ -55,11 +55,11 @@ curl -X DELETE "$MISSION_CONTROL_URL/api/tasks/task-123" \
   -H "Authorization: Bearer $MISSION_CONTROL_TOKEN"
 ```
 
-List tasks (filter by status or agent):
+List tasks (filter by status or assignedAgent):
 
 ```bash
 curl -H "Authorization: Bearer $MISSION_CONTROL_TOKEN" \
-  "$MISSION_CONTROL_URL/api/tasks?status=todo&agent=agent-patch"
+  "$MISSION_CONTROL_URL/api/tasks?status=todo&assignedAgent=agent-patch"
 ```
 
 ## Agent Endpoints

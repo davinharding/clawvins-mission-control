@@ -32,8 +32,8 @@ const formatTask = (task) => ({
 
 router.get('/', validateQuery(schemas.taskQuery), (req, res) => {
   try {
-    const { status, agent } = req.query;
-    const tasks = getAllTasks({ status, agent });
+    const { status, assignedAgent } = req.query;
+    const tasks = getAllTasks({ status, assignedAgent });
     res.json({ tasks: tasks.map(formatTask) });
   } catch (err) {
     console.error('Error fetching tasks:', err);

@@ -32,7 +32,7 @@ const schemas = {
     }),
   taskQuery: z.object({
     status: taskStatus.optional(),
-    agent: z.string().optional(),
+    assignedAgent: z.string().optional(),
   }),
   agentUpdate: z
     .object({

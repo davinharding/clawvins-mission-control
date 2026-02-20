@@ -2,6 +2,7 @@ import * as React from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
+import { GripVertical } from "lucide-react";
 
 type Props = {
   id: string;
@@ -47,8 +48,8 @@ export function DraggableCard({
   // Cleanup on unmount
   React.useEffect(() => () => cancelLongPress(), [cancelLongPress]);
 
-  // Compose our pointerDown + DnD's onPointerDown
-  const handlePointerDown = React.useCallback(
+  // Long-press handler for handle only
+  const handleHandlePointerDown = React.useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       pressStart.current = { x: e.clientX, y: e.clientY };
       longPressTimer.current = setTimeout(() => {
@@ -58,14 +59,8 @@ export function DraggableCard({
           onLongPressRef.current?.();
         }
       }, 300);
-
-      // Forward to DnD when not in selection mode
-      if (!isSelecting) {
-        (listeners as Record<string, (e: React.PointerEvent<HTMLDivElement>) => void> | undefined)
-          ?.onPointerDown?.(e);
-      }
     },
-    [isSelecting, listeners]
+    []
   );
 
   const handlePointerMove = React.useCallback(
@@ -81,27 +76,15 @@ export function DraggableCard({
     [cancelLongPress]
   );
 
-  // Spread all DnD listeners except onPointerDown (handled above)
-  const { onPointerDown: _dndPointerDown, ...otherListeners } =
-    (listeners ?? {}) as Record<string, unknown>;
-
   return (
     <div
       ref={setNodeRef}
-      style={{ ...style, touchAction: "none", WebkitUserSelect: "none" }}
-      {...(isSelecting ? {} : attributes)}
-      {...(isSelecting ? {} : (otherListeners as React.HTMLAttributes<HTMLDivElement>))}
+      style={style}
       className={cn(
         "relative select-none transition-opacity",
-        !isSelecting && "cursor-grab active:cursor-grabbing",
-        isSelecting && "cursor-pointer",
         isDragging && "opacity-30",
         isSelected && "ring-2 ring-primary/60 rounded-lg"
       )}
-      onPointerDown={handlePointerDown}
-      onPointerUp={cancelLongPress}
-      onPointerLeave={cancelLongPress}
-      onPointerMove={handlePointerMove}
     >
       {/* Checkbox indicator — shown in top-left corner when selection mode is active */}
       {isSelecting && (
@@ -126,6 +109,23 @@ export function DraggableCard({
               </svg>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Drag handle — only shown when NOT in selection mode */}
+      {!isSelecting && (
+        <div
+          {...attributes}
+          {...listeners}
+          onPointerDown={handleHandlePointerDown}
+          onPointerUp={cancelLongPress}
+          onPointerLeave={cancelLongPress}
+          onPointerMove={handlePointerMove}
+          className="absolute top-1.5 right-1.5 z-20 cursor-grab active:cursor-grabbing rounded p-0.5 hover:bg-muted/60 transition-colors touch-none"
+          style={{ touchAction: "none" }}
+          aria-label="Drag handle"
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
       )}
 

@@ -240,6 +240,10 @@ function MobileDropRow({ id, children }: { id: string; children: React.ReactNode
         "flex overflow-x-auto gap-3 pb-2 scrollbar-hide min-h-[80px] rounded-lg transition-colors",
         isOver && "bg-primary/5 ring-1 ring-primary/30"
       )}
+      style={{
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-x pan-y"
+      }}
     >
       {children}
     </div>

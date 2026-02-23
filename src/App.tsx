@@ -1351,7 +1351,6 @@ export default function HomePage() {
               style={{ touchAction: "pan-x" }}
             >
               {columns.map((status) => {
-                const railCount = filteredTasks.filter((t) => t.status === status).length;
                 const isActive = activeColumn === status;
                 return (
                   <button
@@ -1372,10 +1371,7 @@ export default function HomePage() {
                         : "border-border/60 text-muted-foreground hover:bg-muted/60"
                     )}
                   >
-                    {columnEmojis[status]} {columnLabels[status]}{" "}
-                    <span className={cn("font-mono", isActive ? "text-primary" : "text-muted-foreground/70")}>
-                      ({railCount})
-                    </span>
+                    {columnEmojis[status]} {columnLabels[status]}
                   </button>
                 );
               })}

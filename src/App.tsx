@@ -316,11 +316,6 @@ export default function HomePage() {
   const activeTaskIdRef = React.useRef<string | null>(null);
   const { notify } = useToast();
 
-  // Mobile column scroll rail state
-  const [activeColumn, setActiveColumn] = React.useState<TaskStatus>("backlog");
-  const columnSectionRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
-  const mobileBoardRef = React.useRef<HTMLDivElement | null>(null);
-
   // Login form state
   const [showLogin, setShowLogin] = React.useState(false);
   const [loginUsername, setLoginUsername] = React.useState("");
@@ -356,39 +351,6 @@ export default function HomePage() {
   React.useEffect(() => {
     activeTaskIdRef.current = activeTaskId;
   }, [activeTaskId]);
-
-  // IntersectionObserver: track which mobile column section is visible
-  React.useEffect(() => {
-    const refs = columnSectionRefs.current;
-    const entries = Object.entries(refs).filter(([, el]) => el != null) as [string, HTMLDivElement][];
-    if (entries.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      (observed) => {
-        // Find the column with highest intersection ratio
-        let best: string | null = null;
-        let bestRatio = -1;
-        for (const entry of observed) {
-          if (entry.intersectionRatio > bestRatio) {
-            bestRatio = entry.intersectionRatio;
-            best = entry.target.getAttribute("data-column");
-          }
-        }
-        if (best) setActiveColumn(best as TaskStatus);
-      },
-      {
-        root: mobileBoardRef.current,
-        threshold: [0, 0.25, 0.5, 0.75, 1.0],
-        rootMargin: "0px",
-      }
-    );
-
-    for (const [, el] of entries) {
-      observer.observe(el);
-    }
-    return () => observer.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -1345,38 +1307,6 @@ export default function HomePage() {
             </div>
 
 
-            {/* ── MOBILE COLUMN SCROLL RAIL (lg:hidden) — sticky nav above board rows ── */}
-            <div
-              className="sticky top-0 z-10 lg:hidden flex gap-1.5 overflow-x-auto px-3 py-2 scrollbar-hide bg-background/95 backdrop-blur border-b border-border/40"
-              style={{ touchAction: "pan-x" }}
-            >
-              {columns.map((status) => {
-                const isActive = activeColumn === status;
-                return (
-                  <button
-                    key={status}
-                    type="button"
-                    style={{ touchAction: "pan-x" }}
-                    onClick={() => {
-                      setActiveColumn(status);
-                      const el = columnSectionRefs.current[status];
-                      if (el) {
-                        el.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }
-                    }}
-                    className={cn(
-                      "flex-shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold transition whitespace-nowrap",
-                      isActive
-                        ? "border-primary bg-primary/20 text-primary shadow-sm"
-                        : "border-border/60 text-muted-foreground hover:bg-muted/60"
-                    )}
-                  >
-                    {columnEmojis[status]} {columnLabels[status]}
-                  </button>
-                );
-              })}
-            </div>
-
             {/* Columns Grid - flex-1 to fill remaining space, overflow hidden */}
             <DndContext
               sensors={sensors}
@@ -1387,7 +1317,6 @@ export default function HomePage() {
             >
               {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
               <div
-                ref={mobileBoardRef}
                 className="flex flex-col gap-2 lg:hidden"
                 style={{ scrollSnapType: "y mandatory", overflowY: "auto" }}
               >
@@ -1397,7 +1326,6 @@ export default function HomePage() {
                     <div
                       key={status}
                       data-column={status}
-                      ref={(el) => { columnSectionRefs.current[status] = el; }}
                       style={{ scrollSnapAlign: "start" }}
                     >
                       {/* Compressed row header */}

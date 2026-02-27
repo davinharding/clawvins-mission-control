@@ -142,8 +142,7 @@ router.get('/', (req, res) => {
         agentTotals[agentId].billedCost += cost;
       }
 
-      // Time period bucketing
-      const bucketKey = getBucketKey(timestamp, period);
+      // Time period bucketing (bucketKey already computed above for deduplication)
       if (!periodBuckets[bucketKey]) {
         periodBuckets[bucketKey] = { 
           timestamp: bucketKey, 

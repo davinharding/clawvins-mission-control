@@ -54,6 +54,7 @@ import { ArchivePanel } from "@/components/ArchivePanel";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { BulkActionBar } from "@/components/BulkActionBar";
+import { CostDashboard } from "@/components/CostDashboard";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -287,6 +288,7 @@ export default function HomePage() {
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [showStats, setShowStats] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
+  const [showCostDashboard, setShowCostDashboard] = React.useState(false);
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [events, setEvents] = React.useState<EventItem[]>([]);
@@ -969,6 +971,16 @@ export default function HomePage() {
             </button>
             <button
               type="button"
+              onClick={() => setShowCostDashboard((v) => !v)}
+              className={cn(
+                "flex items-center gap-0.5 rounded-full border py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60",
+                showCostDashboard ? "border-primary/60 bg-primary/10 text-primary" : "border-border/70"
+              )}
+            >
+              💰 Cost
+            </button>
+            <button
+              type="button"
               onClick={() => setShowEventFeed((v) => !v)}
               className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
             >
@@ -1106,6 +1118,16 @@ export default function HomePage() {
                   className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60"
                 >
                   Stats {showStats ? "▲" : "▼"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCostDashboard((v) => !v)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-lg border px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60",
+                    showCostDashboard ? "border-primary/60 bg-primary/10 text-primary" : "border-border/70"
+                  )}
+                >
+                  💰 Cost
                 </button>
               </div>
               <div className={cn("w-full flex flex-wrap gap-3 text-sm", showStats ? "flex" : "hidden")}>
@@ -1301,30 +1323,48 @@ export default function HomePage() {
             </div>
           </aside>
 
-          {/* CENTER - Kanban Board */}
+          {/* CENTER - Kanban Board or Cost Dashboard */}
           <section className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
             {/* Header - desktop only (mobile uses compact header above) */}
-            <div className="hidden lg:flex mb-4 flex-shrink-0 flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  Kanban Board
-                </p>
-                <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
+            {!showCostDashboard && (
+              <div className="hidden lg:flex mb-4 flex-shrink-0 flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    Kanban Board
+                  </p>
+                  <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
+                </div>
+                <Button onClick={handleAddTask} disabled={loading} className="min-h-[44px]">
+                  Add New Task
+                </Button>
               </div>
-              <Button onClick={handleAddTask} disabled={loading} className="min-h-[44px]">
-                Add New Task
-              </Button>
-            </div>
+            )}
+
+            {/* Cost Dashboard View */}
+            {showCostDashboard && (
+              <div className="flex-1 overflow-y-auto pb-6">
+                <div className="hidden lg:block mb-4 flex-shrink-0">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                      Cost Reporting
+                    </p>
+                    <h2 className="text-2xl font-semibold">API Usage & Billing</h2>
+                  </div>
+                </div>
+                <CostDashboard agents={agents} />
+              </div>
+            )}
 
 
-            {/* Columns Grid - flex-1 to fill remaining space, overflow hidden */}
-            <DndContext
-              sensors={sensors}
-              modifiers={[snapCenterToCursor]}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragCancel={() => setDraggingTaskId(null)}
-            >
+            {/* Kanban Board - only show when not viewing cost dashboard */}
+            {!showCostDashboard && (
+              <DndContext
+                sensors={sensors}
+                modifiers={[snapCenterToCursor]}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragCancel={() => setDraggingTaskId(null)}
+              >
               {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
               <div
                 className="flex flex-col gap-2 lg:hidden"
@@ -1608,7 +1648,8 @@ export default function HomePage() {
 
               {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
               {isSelecting && <div className="h-20 flex-shrink-0" />}
-            </DndContext>
+              </DndContext>
+            )}
           </section>
 
           {/* RIGHT SIDEBAR - Event Feed (desktop only; mobile uses overlay) */}

@@ -12,6 +12,7 @@ import eventsRoutes from './routes/events.js';
 import authRoutes from './routes/auth.js';
 import agentTasksRoutes from './routes/agent-tasks.js';
 import searchRoutes from './routes/search.js';
+import costsRoutes from './routes/costs.js';
 import { setupWebSocket } from './socket.js';
 import { SessionMonitor } from './session-monitor.js';
 import { createEvent, autoArchiveDoneTasks, createAgent, getAgentById, db } from './db.js';
@@ -67,6 +68,7 @@ app.use('/api/agents', authMiddleware, agentsRoutes);
 app.use('/api/events', authMiddleware, eventsRoutes);
 app.use('/api/agent-tasks', agentTasksRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/costs', authMiddleware, costsRoutes);
 
 // Agent sync from OpenClaw sessions
 async function syncAgentsFromOpenClaw() {

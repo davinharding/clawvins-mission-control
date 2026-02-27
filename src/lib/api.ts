@@ -351,3 +351,54 @@ export async function createComment(taskId: string, text: string) {
     body: JSON.stringify({ text }),
   });
 }
+
+export type CostSummary = {
+  totalBilledCost: number;
+  totalAnthropicCost: number;
+  totalAnthropicTokens: number;
+  todayBilledCost: number;
+  weekBilledCost: number;
+  monthBilledCost: number;
+};
+
+export type PeriodData = {
+  timestamp: number;
+  billedCost: number;
+  anthropicCost: number;
+  totalCost: number;
+  count: number;
+};
+
+export type ProviderBreakdown = {
+  provider: string;
+  cost: number;
+  tokens: number;
+  count: number;
+  isAnthropic: boolean;
+};
+
+export type AgentBreakdown = {
+  agentId: string;
+  cost: number;
+  billedCost: number;
+  anthropicCost: number;
+  tokens: number;
+  count: number;
+};
+
+export type CostData = {
+  summary: CostSummary;
+  periodData: PeriodData[];
+  providerBreakdown: ProviderBreakdown[];
+  agentBreakdown: AgentBreakdown[];
+};
+
+export async function getCosts(params?: { period?: 'hour' | 'day' | 'week' | 'month'; limit?: number }) {
+  const search = new URLSearchParams();
+  if (params?.period) search.set('period', params.period);
+  if (params?.limit) search.set('limit', String(params.limit));
+  const query = search.toString();
+  return request<CostData>(`/costs${query ? `?${query}` : ''}`, {
+    headers: authHeaders(),
+  });
+}

@@ -53,7 +53,7 @@ export function NotificationTray({
             onClick={() => setOpen(false)}
           />
           {/* Drawer */}
-          <div className="absolute right-0 top-11 z-50 w-[85vw] max-w-[340px] rounded-xl border border-border bg-slate-950 shadow-2xl">
+          <div className="absolute right-4 top-11 z-50 w-[calc(100vw-2rem)] max-w-[340px] rounded-xl border border-border bg-slate-950/95 backdrop-blur-sm shadow-2xl">
             <div 
               className="flex items-center justify-between border-b border-border/60 px-4 py-3"
               style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}

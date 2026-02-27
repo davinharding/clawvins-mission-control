@@ -12,7 +12,7 @@ router.get('/', (req, res) => {
     const period = req.query.period || 'day'; // hour, day, week, month
     const limit = parseInt(req.query.limit) || 30;
 
-    // Get all events with cost data
+    // Get all events with cost data, including source
     const events = db.prepare(`
       SELECT 
         id,
@@ -20,7 +20,8 @@ router.get('/', (req, res) => {
         message,
         agent_id,
         timestamp,
-        detail
+        detail,
+        source
       FROM events 
       WHERE detail IS NOT NULL
       ORDER BY timestamp DESC
@@ -31,11 +32,38 @@ router.get('/', (req, res) => {
     const providerTotals = {};
     const agentTotals = {};
     const periodBuckets = {};
+    const sourceTotals = {};
+
+    // Deduplication: track what we've seen from openclaw-router
+    const routerSeen = new Set(); // model+bucketKey combinations
+    const dedupSkipped = [];
 
     let totalBilledCost = 0;
     let totalAnthropicCost = 0;
     let totalAnthropicTokens = 0;
 
+    // First pass: collect all openclaw-router entries to establish deduplication baseline
+    for (const event of events) {
+      if (!event.detail) continue;
+      
+      let detail;
+      try {
+        detail = JSON.parse(event.detail);
+      } catch {
+        continue;
+      }
+
+      if (!detail.cost || detail.cost === null) continue;
+
+      const source = event.source || 'openclaw-router';
+      if (source === 'openclaw-router') {
+        const model = detail.model || 'unknown';
+        const bucketKey = getBucketKey(event.timestamp, period);
+        routerSeen.add(`${model}:${bucketKey}`);
+      }
+    }
+
+    // Second pass: aggregate, skipping deduplicated entries
     for (const event of events) {
       if (!event.detail) continue;
       
@@ -53,6 +81,17 @@ router.get('/', (req, res) => {
       const tokens = parseInt(detail.tokens) || 0;
       const agentId = event.agent_id || 'unknown';
       const timestamp = event.timestamp;
+      const source = event.source || 'openclaw-router';
+
+      // Deduplication: skip openai-usage-api entries if we already have router data for this model+bucket
+      const bucketKey = getBucketKey(timestamp, period);
+      const dedupKey = `${model}:${bucketKey}`;
+      
+      if (source === 'openai-usage-api' && routerSeen.has(dedupKey)) {
+        dedupSkipped.push({ model, timestamp, cost });
+        console.log(`[Costs] Deduplicated: ${model} at ${new Date(timestamp).toISOString()} ($${cost}) - already in router logs`);
+        continue;
+      }
 
       // Determine if this is Anthropic (included in Max plan)
       const isAnthropic = model.toLowerCase().includes('claude') || 
@@ -66,6 +105,19 @@ router.get('/', (req, res) => {
         totalAnthropicTokens += tokens;
       } else {
         totalBilledCost += cost;
+      }
+
+      // Source aggregation
+      if (!sourceTotals[source]) {
+        sourceTotals[source] = { cost: 0, billedCost: 0, anthropicCost: 0, tokens: 0, count: 0 };
+      }
+      sourceTotals[source].cost += cost;
+      sourceTotals[source].tokens += tokens;
+      sourceTotals[source].count += 1;
+      if (isAnthropic) {
+        sourceTotals[source].anthropicCost += cost;
+      } else {
+        sourceTotals[source].billedCost += cost;
       }
 
       // Provider aggregation
@@ -129,6 +181,13 @@ router.get('/', (req, res) => {
         ...data,
       }))
       .sort((a, b) => b.billedCost - a.billedCost);
+
+    const sourceBreakdown = Object.entries(sourceTotals)
+      .map(([source, data]) => ({
+        source,
+        ...data,
+      }))
+      .sort((a, b) => b.cost - a.cost);
 
     // Calculate summary stats
     const now = Date.now();
@@ -207,10 +266,16 @@ router.get('/', (req, res) => {
         todayBilledCost: parseFloat(todayCost.toFixed(4)),
         weekBilledCost: parseFloat(weekCost.toFixed(4)),
         monthBilledCost: parseFloat(monthCost.toFixed(4)),
+        dedupSkipped: dedupSkipped.length,
       },
       periodData,
       providerBreakdown,
       agentBreakdown,
+      sourceBreakdown,
+      deduplication: {
+        skipped: dedupSkipped.length,
+        details: dedupSkipped.slice(0, 10), // First 10 for debugging
+      },
     });
   } catch (err) {
     console.error('Error fetching cost data:', err);

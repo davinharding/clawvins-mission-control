@@ -102,6 +102,14 @@ function initDB() {
     // Column already exists — fine
   }
 
+  // Migration: add source column if it doesn't exist (for tracking cost data origin)
+  try {
+    db.prepare("ALTER TABLE events ADD COLUMN source TEXT DEFAULT 'openclaw-router'").run();
+    console.log('[DB] Migrated events table: added source column');
+  } catch {
+    // Column already exists — fine
+  }
+
   // Migration: add done_at column if it doesn't exist
   try {
     db.prepare("ALTER TABLE tasks ADD COLUMN done_at INTEGER").run();

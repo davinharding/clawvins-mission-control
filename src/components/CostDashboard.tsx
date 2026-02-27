@@ -291,6 +291,64 @@ export function CostDashboard({ agents }: Props) {
         </Card>
       </div>
 
+      {/* Source Breakdown (if available) */}
+      {costData.sourceBreakdown && costData.sourceBreakdown.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Cost Source Breakdown</h3>
+            {costData.summary.dedupSkipped !== undefined && costData.summary.dedupSkipped > 0 && (
+              <Badge variant="outline" className="text-amber-400 border-amber-400/40">
+                {costData.summary.dedupSkipped} deduplicated
+              </Badge>
+            )}
+          </div>
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-border/60 bg-muted/30">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Source
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Billed Cost
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Anthropic (Included)
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Requests
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {costData.sourceBreakdown.map((item, index) => (
+                    <tr key={index} className="hover:bg-muted/30 transition">
+                      <td className="px-4 py-3">
+                        <span className="font-medium">
+                          {item.source === 'openclaw-router' ? 'OpenClaw Router' : 
+                           item.source === 'openai-usage-api' ? 'OpenAI Direct (Codex)' : 
+                           item.source}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono">
+                        {formatCost(item.billedCost)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-emerald-400">
+                        {formatCost(item.anthropicCost)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">
+                        {item.count}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Agent Breakdown */}
       <div>
         <h3 className="text-lg font-semibold mb-4">Agent Breakdown</h3>

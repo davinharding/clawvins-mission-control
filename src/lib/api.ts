@@ -386,11 +386,27 @@ export type AgentBreakdown = {
   count: number;
 };
 
+export type SourceBreakdown = {
+  source: string;
+  cost: number;
+  billedCost: number;
+  anthropicCost: number;
+  tokens: number;
+  count: number;
+};
+
+export type DeduplicationInfo = {
+  skipped: number;
+  details: Array<{ model: string; timestamp: number; cost: number }>;
+};
+
 export type CostData = {
-  summary: CostSummary;
+  summary: CostSummary & { dedupSkipped?: number };
   periodData: PeriodData[];
   providerBreakdown: ProviderBreakdown[];
   agentBreakdown: AgentBreakdown[];
+  sourceBreakdown?: SourceBreakdown[];
+  deduplication?: DeduplicationInfo;
 };
 
 export async function getCosts(params?: { period?: 'hour' | 'day' | 'week' | 'month'; limit?: number }) {

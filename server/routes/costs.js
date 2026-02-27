@@ -58,8 +58,8 @@ router.get('/', (req, res) => {
       const source = event.source || 'openclaw-router';
       if (source === 'openclaw-router') {
         const model = detail.model || 'unknown';
-        const bucketKey = getBucketKey(event.timestamp, period);
-        routerSeen.add(`${model}:${bucketKey}`);
+        const bucket = getBucketKey(event.timestamp, period);
+        routerSeen.add(`${model}:${bucket}`);
       }
     }
 

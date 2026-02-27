@@ -65,13 +65,121 @@ export type LoginResponse = {
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'missionControlToken';
+const REFRESH_TOKEN_KEY = 'missionControlRefreshToken';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+export const clearToken = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
+let refreshPromise: Promise<string | null> | null = null;
+
+// Store credentials for token refresh
+export const storeCredentials = (username: string, password: string) => {
+  // Store base64 encoded credentials for refresh
+  const encoded = btoa(`${username}:${password}`);
+  localStorage.setItem(REFRESH_TOKEN_KEY, encoded);
+};
+
+export const getStoredCredentials = (): { username: string; password: string } | null => {
+  const encoded = localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (!encoded) return null;
+  try {
+    const decoded = atob(encoded);
+    const [username, password] = decoded.split(':');
+    return { username, password };
+  } catch {
+    return null;
+  }
+};
+
+// Attempt to refresh the token using stored credentials
+async function tryRefreshToken(): Promise<string | null> {
+  const creds = getStoredCredentials();
+  if (!creds) return null;
+  
+  try {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: creds.username, password: creds.password }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    setToken(data.token);
+    return data.token;
+  } catch {
+    return null;
+  }
+}
+
+// Get a valid token, refreshing if necessary
+async function getValidToken(): Promise<string | null> {
+  const token = getToken();
+  if (!token) return null;
+  return token;
+}
+
+export type AuthError = { code: 'EXPIRED' | 'INVALID' | 'NETWORK' };
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, options);
+  const token = await getValidToken();
+  const headers = {
+    ...options.headers,
+  };
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  // Handle 401 - try to refresh token once
+  if (res.status === 401 && !path.includes('/auth/login')) {
+    // Prevent infinite loops
+    if (refreshPromise) {
+      const newToken = await refreshPromise;
+      if (newToken) {
+        (headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+        const retryRes = await fetch(`${API_BASE}${path}`, {
+          ...options,
+          headers,
+        });
+        if (!retryRes.ok) {
+          const message = await retryRes.text();
+          throw new Error(message || `Request failed with ${retryRes.status}`);
+        }
+        return retryRes.json() as Promise<T>;
+      }
+    }
+    
+    refreshPromise = tryRefreshToken();
+    const newToken = await refreshPromise;
+    refreshPromise = null;
+    
+    if (newToken) {
+      // Retry with new token
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+      const retryRes = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers,
+      });
+      if (!retryRes.ok) {
+        const message = await retryRes.text();
+        throw new Error(message || `Request failed with ${retryRes.status}`);
+      }
+      return retryRes.json() as Promise<T>;
+    } else {
+      // Refresh failed - clear token and show friendly error
+      clearToken();
+      throw new Error('SESSION_EXPIRED');
+    }
+  }
+
   if (!res.ok) {
     const message = await res.text();
     throw new Error(message || `Request failed with ${res.status}`);

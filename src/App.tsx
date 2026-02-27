@@ -24,6 +24,7 @@ import {
   getToken,
   login,
   setToken,
+  storeCredentials,
   updateTask,
   deleteTask,
   type Comment
@@ -384,7 +385,15 @@ export default function HomePage() {
         setArchivedTasks(archivedResponse.tasks);
       } catch (err) {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : "Failed to load mission data");
+        const errorMsg = err instanceof Error ? err.message : "Failed to load mission data";
+        // Handle session expired - show friendly message instead of raw JSON
+        if (errorMsg === 'SESSION_EXPIRED' || errorMsg.includes('expired') || errorMsg.includes('Invalid or expired token')) {
+          setError("Session expired. Please sign in again.");
+          setShowLogin(true);
+          setTokenState(null);
+        } else {
+          setError(errorMsg);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -588,6 +597,7 @@ export default function HomePage() {
     try {
       const response = await login(loginUsername, loginPassword);
       setToken(response.token);
+      storeCredentials(loginUsername, loginPassword); // Store for auto-refresh
       setTokenState(response.token);
       setShowLogin(false);
       setLoginPassword("");

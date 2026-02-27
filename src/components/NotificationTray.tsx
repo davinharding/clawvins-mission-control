@@ -49,11 +49,11 @@ export function NotificationTray({
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-40 bg-black/50"
             onClick={() => setOpen(false)}
           />
           {/* Drawer */}
-          <div className="absolute right-0 top-11 z-50 w-80 rounded-xl border border-border bg-card shadow-2xl">
+          <div className="absolute right-0 top-11 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card shadow-2xl">
             <div 
               className="flex items-center justify-between border-b border-border/60 px-4 py-3"
               style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}

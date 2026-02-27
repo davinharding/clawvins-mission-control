@@ -66,12 +66,29 @@ export type LoginResponse = {
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'missionControlToken';
 const REFRESH_TOKEN_KEY = 'missionControlRefreshToken';
+const AGENT_ID_KEY = 'missionControlAgentId';
+const AGENT_NAME_KEY = 'missionControlAgentName';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
 export const clearToken = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(AGENT_ID_KEY);
+  localStorage.removeItem(AGENT_NAME_KEY);
+};
+
+// Agent identity for comments - allows agents to post comments with their own identity
+export const setAgentIdentity = (agentId: string, agentName: string) => {
+  localStorage.setItem(AGENT_ID_KEY, agentId);
+  localStorage.setItem(AGENT_NAME_KEY, agentName);
+};
+
+export const getAgentIdentity = (): { agentId: string; agentName: string } | null => {
+  const agentId = localStorage.getItem(AGENT_ID_KEY);
+  const agentName = localStorage.getItem(AGENT_NAME_KEY);
+  if (!agentId || !agentName) return null;
+  return { agentId, agentName };
 };
 
 let refreshPromise: Promise<string | null> | null = null;
@@ -187,12 +204,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function login(username: string, password: string) {
-  return request<LoginResponse>('/auth/login', {
+export async function login(username: string, password: string, agentIdentity?: { agentId: string; agentName: string }) {
+  const response = await request<LoginResponse>('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   });
+  
+  // If agentIdentity is provided (e.g., for agent-patch, agent-cypress), set it for comment attribution
+  if (agentIdentity) {
+    setAgentIdentity(agentIdentity.agentId, agentIdentity.agentName);
+  }
+  
+  return response;
 }
 
 function authHeaders(): Record<string, string> {
@@ -305,14 +329,25 @@ export async function searchTasks(query: string, limit = 20): Promise<{ results:
 }
 
 // Author is determined server-side from the auth token.
-// UI callers pass only text. Agents using API key can send x-agent-id header for identity.
+// Agents can send x-agent-id and x-agent-name headers for identity.
+// Use setAgentIdentity() to set the agent's identity before making API calls.
 export async function createComment(taskId: string, text: string) {
+  const agentIdentity = getAgentIdentity();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...authHeaders(),
+  };
+  
+  // Add agent identity headers if set - this enables agent attribution in comments
+  if (agentIdentity) {
+    headers['x-agent-key'] = 'mc-agent-2026-z3x6c9v2b5n8m1k4';
+    headers['x-agent-id'] = agentIdentity.agentId;
+    headers['x-agent-name'] = agentIdentity.agentName;
+  }
+  
   return request<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(),
-    },
+    headers,
     body: JSON.stringify({ text }),
   });
 }

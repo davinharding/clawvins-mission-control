@@ -20,7 +20,8 @@ const USERS = {
 
 router.post('/login', validateBody(schemas.login), (req, res) => {
   const { username, password } = req.body;
-  const entry = USERS[username];
+  // Make username lookup case-insensitive
+  const entry = USERS[username.toLowerCase()];
 
   if (!entry || entry.password !== password) {
     return res.status(401).json({ error: 'Invalid credentials' });

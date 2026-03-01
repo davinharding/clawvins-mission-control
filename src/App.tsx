@@ -974,7 +974,7 @@ export default function HomePage() {
               onClick={() => setShowCostDashboard((v) => !v)}
               className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
             >
-              {showCostDashboard ? "Tasks" : "💰 Cost"}
+              {showCostDashboard ? "📋 Tasks" : "💰 Cost"}
             </button>
             <button
               type="button"
@@ -1078,13 +1078,12 @@ export default function HomePage() {
         <div className="hidden lg:flex flex-col gap-4 px-6 py-6">
           <div className="flex flex-row items-start justify-between">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight">
-                Mission Control V2 — Agent Orchestration
-                <span className="text-muted-foreground font-medium">
-                  {" "}
-                  — {showCostDashboard ? "Cost Reporting" : "Live Task Pipeline"}
-                </span>
-              </h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                Mission Control v2
+              </p>
+              <h2 className="text-xl font-medium text-muted-foreground">
+                {showCostDashboard ? "Cost Reporting" : "Live Task Pipeline"}
+              </h2>
             </div>
             <div className="flex flex-col items-end gap-3 text-sm">
               <div className="flex items-center gap-2">
@@ -1131,7 +1130,7 @@ export default function HomePage() {
                   onClick={() => setShowCostDashboard((v) => !v)}
                   className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60"
                 >
-                  {showCostDashboard ? "Tasks" : "💰 Cost"}
+                  {showCostDashboard ? "📋 Tasks" : "💰 Cost"}
                 </button>
               </div>
               <div className={cn("w-full flex flex-wrap gap-3 text-sm", showStats ? "flex" : "hidden")}>

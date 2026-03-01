@@ -17,7 +17,7 @@ export function KanbanColumn({ id, children, className }: Props) {
       className={cn(
         "flex flex-col min-h-0 overflow-hidden rounded-2xl border border-dashed border-border/70 bg-card/40 p-3 transition-colors",
         className,
-        isOver && "border-primary/60 bg-primary/5 ring-1 ring-primary/30"
+        isOver && "!border-primary/60 !bg-primary/5 ring-1 ring-primary/30"
       )}
     >
       {children}

@@ -1,4 +1,5 @@
 import * as React from "react";
+import * as ReactDOM from "react-dom";
 import { cn } from "@/lib/utils";
 
 export type Notification = {
@@ -44,16 +45,20 @@ export function NotificationTray({
         )}
       </button>
 
-      {/* Panel */}
-      {open && (
+      {/* Panel — portalled to body to escape header stacking context */}
+      {open && ReactDOM.createPortal(
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-40 bg-black/50"
+            className="fixed inset-0 bg-black/50"
+            style={{ zIndex: 99998 }}
             onClick={() => setOpen(false)}
           />
           {/* Drawer */}
-          <div className="absolute right-4 top-11 z-50 w-[calc(100vw-2rem)] max-w-[340px] rounded-xl border border-border bg-slate-950/95 backdrop-blur-sm shadow-2xl">
+          <div
+            className="fixed right-4 top-14 w-[calc(100vw-2rem)] max-w-[340px] rounded-xl border border-border bg-slate-950 shadow-2xl"
+            style={{ zIndex: 99999 }}
+          >
             <div 
               className="flex items-center justify-between border-b border-border/60 px-4 py-3"
               style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}
@@ -127,7 +132,8 @@ export function NotificationTray({
               ))}
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );

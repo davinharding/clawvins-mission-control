@@ -23,12 +23,14 @@ export function DraggableCard({
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
 
-  // Detect if we're on mobile (< 1024px, which is the 'lg' breakpoint)
+  // Detect if we're on mobile (< 768px, which is the 'md' breakpoint)
+  // Mobile uses horizontal scrolling columns and needs a drag handle
+  // Desktop uses vertical columns and the full card is draggable
   const [isMobile, setIsMobile] = React.useState(false);
 
   React.useEffect(() => {
     // Check initial screen size
-    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
     setIsMobile(mediaQuery.matches);
 
     // Listen for changes
@@ -135,6 +137,7 @@ export function DraggableCard({
       )}
 
       {/* Drag handle — only shown on mobile when NOT in selection mode */}
+      {/* Positioned below the title/priority area to avoid overlap */}
       {!isSelecting && isMobile && (
         <div
           {...attributes}
@@ -143,7 +146,7 @@ export function DraggableCard({
           onPointerUp={cancelLongPress}
           onPointerLeave={cancelLongPress}
           onPointerMove={handlePointerMove}
-          className="absolute top-7 right-1.5 z-20 cursor-grab active:cursor-grabbing rounded p-0.5 hover:bg-muted/60 transition-colors touch-none"
+          className="absolute top-12 right-1.5 z-20 cursor-grab active:cursor-grabbing rounded p-0.5 hover:bg-muted/60 transition-colors touch-none"
           style={{ touchAction: "none" }}
           aria-label="Drag handle"
         >

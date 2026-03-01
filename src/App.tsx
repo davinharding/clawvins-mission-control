@@ -972,12 +972,9 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => setShowCostDashboard((v) => !v)}
-              className={cn(
-                "flex items-center gap-0.5 rounded-full border py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60",
-                showCostDashboard ? "border-primary/60 bg-primary/10 text-primary" : "border-border/70"
-              )}
+              className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
             >
-              💰 Cost
+              {showCostDashboard ? "Tasks" : "💰 Cost"}
             </button>
             <button
               type="button"
@@ -1081,10 +1078,13 @@ export default function HomePage() {
         <div className="hidden lg:flex flex-col gap-4 px-6 py-6">
           <div className="flex flex-row items-start justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                Mission Control v2
-              </p>
-              <h1 className="text-3xl font-semibold tracking-tight">Agent Orchestration</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">
+                Mission Control V2 — Agent Orchestration
+                <span className="text-muted-foreground font-medium">
+                  {" "}
+                  — {showCostDashboard ? "Cost Reporting" : "Live Task Pipeline"}
+                </span>
+              </h1>
             </div>
             <div className="flex flex-col items-end gap-3 text-sm">
               <div className="flex items-center gap-2">
@@ -1094,6 +1094,13 @@ export default function HomePage() {
                     setModalOpen(true);
                   }}
                 />
+                <Button
+                  onClick={handleAddTask}
+                  disabled={loading}
+                  className="min-h-[44px]"
+                >
+                  + New Task
+                </Button>
                 <ConnectionStatus state={connectionState} />
                 <NotificationTray
                   notifications={notifications}
@@ -1122,12 +1129,9 @@ export default function HomePage() {
                 <button
                   type="button"
                   onClick={() => setShowCostDashboard((v) => !v)}
-                  className={cn(
-                    "flex items-center gap-1 rounded-lg border px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60",
-                    showCostDashboard ? "border-primary/60 bg-primary/10 text-primary" : "border-border/70"
-                  )}
+                  className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60"
                 >
-                  💰 Cost
+                  {showCostDashboard ? "Tasks" : "💰 Cost"}
                 </button>
               </div>
               <div className={cn("w-full flex flex-wrap gap-3 text-sm", showStats ? "flex" : "hidden")}>
@@ -1325,32 +1329,9 @@ export default function HomePage() {
 
           {/* CENTER - Kanban Board or Cost Dashboard */}
           <section className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
-            {/* Header - desktop only (mobile uses compact header above) */}
-            {!showCostDashboard && (
-              <div className="hidden lg:flex mb-4 flex-shrink-0 flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                    Kanban Board
-                  </p>
-                  <h2 className="text-2xl font-semibold">Live Task Pipeline</h2>
-                </div>
-                <Button onClick={handleAddTask} disabled={loading} className="min-h-[44px]">
-                  Add New Task
-                </Button>
-              </div>
-            )}
-
             {/* Cost Dashboard View */}
             {showCostDashboard && (
               <div className="flex-1 overflow-y-auto pb-6">
-                <div className="hidden lg:block mb-4 flex-shrink-0">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                      Cost Reporting
-                    </p>
-                    <h2 className="text-2xl font-semibold">API Usage & Billing</h2>
-                  </div>
-                </div>
                 <CostDashboard agents={agents} />
               </div>
             )}

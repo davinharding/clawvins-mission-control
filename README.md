@@ -1,192 +1,224 @@
-# 🎯 Mission Control
+# Mission Control
 
-A self-hosted operations dashboard for managing AI agent tasks, events, and workflows — built with React, TypeScript, and Tailwind CSS.
+A self-hosted operations dashboard for AI agent tasks, sessions, and cost telemetry. Mission Control combines a real-time Kanban board with OpenClaw session ingest, task automation, and cost reporting in a single React + Express + SQLite stack.
 
 ![Stack](https://img.shields.io/badge/React_19-TypeScript-blue) ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3-38bdf8) ![SQLite](https://img.shields.io/badge/SQLite-better--sqlite3-003b57)
 
 ---
 
-## ✨ Features
+## Highlights
 
-### Task Management
-- **Kanban board** with 5 columns: Backlog → Todo → In Progress → Testing → Done
-- **Drag-and-drop** reordering between columns (via `@dnd-kit`)
-- **Task cards** with assignee emoji avatars, priority badges, and tag chips
-- **Archive system** — archive completed tasks with a dedicated panel; auto-archives done tasks every 60 min
-- **Full task editor** — title, description, priority, status, assigned agent, tags, due date
+### Task & Workflow Management
+- Kanban board with five active statuses (backlog, todo, in-progress, testing, done).
+- Drag-and-drop across columns plus drag-to-archive.
+- Multi-select mode with bulk move, archive, and delete actions.
+- Rich task editor: title, description, priority, status, tags, assignee, due date.
+- Comments per task with linkification and a real-time activity stream.
+- Archive panel with restore-to-status controls and auto-archive after 24 hours in done.
 
-### Agent Sidebar
-- **Agent list** with emoji avatars (🐾🔧🎯💪🔍📨✨📒🏋️) and color-coded categories
-- **Category filter pills** — Main (blue), Dev (amber), Research (purple), Ops (emerald)
-- **Status indicators** — online/offline/busy with live dot
-- **Clickable links** in comments and event descriptions (`LinkifiedText` component)
+### Realtime Ops View
+- Live event feed with detail modal (session channel, model, tokens, cost, tool calls).
+- Notification tray for unread events.
+- Connection status indicator with reconnect states (Socket.io).
 
-### Comments & Activity
-- Per-task comment threads
-- Real-time event feed (agent status changes, task updates, system events)
-- Event detail modal with full context
-- Notification tray for unread events
+### Search & Navigation
+- Global search across tasks and comments (Cmd/Ctrl+K).
+- Results grouped by status with quick jump to task.
 
-### Collaboration
-- **WebSocket** push updates — board reflects changes from any connected agent in real time
-- Agent API — authenticated REST endpoints for agents to create/update tasks and post comments
+### Agent + OpenClaw Integration
+- Agent sync from OpenClaw gateway on startup and every 5 minutes.
+- Session watcher reads OpenClaw jsonl logs and posts session events to Mission Control.
+- Task assignment webhook notifies agents via active OpenClaw session or channel.
 
----
-
-## 🛠 Stack
-
-### Frontend
-| Layer | Tech |
-|-------|------|
-| UI Framework | React 19 + TypeScript |
-| Bundler | Vite 6 |
-| Styling | Tailwind CSS 3 |
-| Components | Radix UI + shadcn/ui primitives |
-| Icons | Lucide React |
-| Drag & Drop | `@dnd-kit/core` + `@dnd-kit/sortable` |
-| HTTP | Axios |
-
-### Backend
-| Layer | Tech |
-|-------|------|
-| Server | Express.js |
-| Database | SQLite (`better-sqlite3`) |
-| Auth | JWT (access + refresh tokens) |
-| Real-time | WebSocket (`ws`) |
-| Process mgmt | `keep-alive.sh` shell wrapper |
+### Cost Reporting
+- Cost dashboard with hourly/daily/weekly/monthly rollups.
+- Provider and agent breakdowns, with Anthropic usage tracked separately.
+- Optional OpenAI Usage API sync endpoint for backfilling usage data.
 
 ---
 
-## 🚀 Getting Started
+## Architecture
+
+```
+React UI (Vite)  <--REST/Socket.io-->  Express API  --> SQLite (better-sqlite3)
+       |                                      |
+       |                                      +-- Auto-archive + agent sync
+       |
+       +-- Global search, bulk actions, cost dashboard
+
+OpenClaw sessions -> scripts/watch-sessions.js -> /api/admin/session-sync
+OpenClaw gateway  -> /api/admin/sync-agents (ADMIN_SECRET)
+```
+
+Key modules:
+- Frontend: `src/App.tsx`, `src/components/*`, `src/lib/*`
+- Backend: `server/index.js`, `server/routes/*`, `server/db.js`
+- Session ingest: `scripts/watch-sessions.js`, `server/session-monitor.js`
+
+---
+
+## Getting Started
 
 ### Prerequisites
 - Node.js 18+
-- `.env` file (see `.env.example`)
+- SQLite (via `better-sqlite3`)
 
-### Setup
+### Install
 
 ```bash
 npm install
 cp .env.example .env
-# Fill in JWT_SECRET, ADMIN_SECRET, AGENT_API_KEY
 ```
 
-### Development
+### Environment Variables (required)
+- `JWT_SECRET`: signing secret for auth tokens
+- `ADMIN_USERNAME`, `ADMIN_PASSWORD`: admin login
+- `DAVIN_USERNAME`, `DAVIN_PASSWORD`: secondary admin login
+- `ADMIN_SECRET`: protects admin-only endpoints
+- `AGENT_API_KEY`: shared key for agent API access
+- `FRONTEND_URL`: used in webhook notifications (default http://localhost:3001)
+- `VITE_API_URL`: backend API base for the frontend
+
+### Optional Integrations
+- OpenClaw gateway:
+  - `OPENCLAW_GATEWAY_URL`
+  - `OPENCLAW_GATEWAY_TOKEN`
+  - `OPENCLAW_REQUEST_TIMEOUT_MS`
+- OpenAI Usage API:
+  - `OPENAI_API_KEY`
+- Socket URL override:
+  - `VITE_SOCKET_URL`
+
+---
+
+## Run Locally
+
+### Development (recommended)
 
 ```bash
-# Terminal 1 — backend
-node server/index.js
+# Terminal 1 - backend with reload
+npm run server:dev
 
-# Terminal 2 — frontend
+# Terminal 2 - frontend
 npm run dev
 ```
 
-Backend: `http://localhost:3002`  
-Frontend: `http://localhost:5173` (proxies API to backend)
+By default the Vite dev server runs on `http://localhost:3001/mission_control/`.
+If the backend is on a different origin, set `VITE_API_URL=http://localhost:3002/api`.
+
+### Full stack (seed + dev servers)
+
+```bash
+npm run fullstack
+```
 
 ### Production Build
 
 ```bash
 npm run build
-node server/index.js
+npm run server
 ```
 
-Serves the built SPA + API from port `3002`.
-
-### Keeping it Running
+### Keep Alive (local process manager)
 
 ```bash
 bash keep-alive.sh
 ```
 
-Auto-restarts the server on crash. Logs to `/tmp/mc-server.log`.
+Starts backend, Vite preview (port 3001), and the session watcher. Logs to `/tmp/mc-server.log`.
 
 ---
 
-## 📁 Project Structure
+## API Overview
+
+### Auth
+```
+POST /api/auth/login
+```
+
+### Tasks
+```
+GET    /api/tasks
+GET    /api/tasks/archived
+POST   /api/tasks
+PATCH  /api/tasks/:id
+DELETE /api/tasks/:id
+GET    /api/tasks/:id/comments
+POST   /api/tasks/:id/comments
+```
+
+### Agents & Events
+```
+GET    /api/agents
+PATCH  /api/agents/:id
+GET    /api/events
+```
+
+### Agent-Specific
+```
+GET    /api/agent-tasks/mine
+GET    /api/agent-tasks/:taskId
+PATCH  /api/agent-tasks/:taskId
+PATCH  /api/agent-tasks/:taskId/status
+POST   /api/agent-tasks/:taskId/comment
+```
+
+### Search
+```
+GET    /api/search?q=...
+```
+
+### Cost & Usage
+```
+GET    /api/costs?period=day&limit=30
+GET    /api/openai-usage/sync?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+GET    /api/openai-usage/data
+```
+
+### Admin (requires ADMIN_SECRET)
+```
+POST   /api/admin/sync-agents
+POST   /api/admin/session-sync
+```
+
+---
+
+## Authentication
+
+- JWT Bearer tokens for the UI and admin API.
+- Agents can authenticate with `X-API-Key` or `X-Agent-Key`.
+- Optional agent identity headers: `X-Agent-Id`, `X-Agent-Name`.
+
+---
+
+## Project Structure
 
 ```
 src/
-├── App.tsx                  # Main shell, board, sidebar, event feed
-├── components/
-│   ├── KanbanColumn.tsx     # Board column with droppable zone
-│   ├── DraggableCard.tsx    # Task card (drag source)
-│   ├── TaskEditModal.tsx    # Full task editor modal
-│   ├── CommentsSection.tsx  # Per-task comment thread
-│   ├── CommentItem.tsx      # Individual comment with linkification
-│   ├── ArchivePanel.tsx     # Archived tasks panel (droppable)
-│   ├── EventDetailModal.tsx # Event detail overlay
-│   ├── NotificationTray.tsx # Unread event notifications
-│   ├── ConnectionStatus.tsx # WebSocket connection indicator
-│   ├── LinkifiedText.tsx    # Auto-links URLs in text
-│   └── ui/                  # Radix/shadcn primitives
-├── lib/
-│   └── utils.ts
-└── main.tsx
-
+  App.tsx
+  components/
+  lib/
 server/
-├── index.js                 # Express + WebSocket server
-├── db.js                    # SQLite setup + migrations
-├── auth.js                  # JWT middleware
-└── routes/
-    ├── tasks.js
-    ├── agents.js
-    ├── comments.js
-    └── events.js
+  index.js
+  db.js
+  routes/
+  socket.js
+scripts/
+  watch-sessions.js
 ```
 
 ---
 
-## 🔐 Authentication
-
-| Role | How |
-|------|-----|
-| Admin (Davin) | Username + password → JWT |
-| Agents | `AGENT_API_KEY` header |
-
-Default admin: `davin` / set via `ADMIN_SECRET` in `.env`
-
----
-
-## 📋 Task Statuses
-
-| Status | Column | Color |
-|--------|--------|-------|
-| `backlog` | 📋 Backlog | Slate |
-| `todo` | 🎯 Todo | Sky |
-| `in-progress` | ⚡ In Progress | Violet |
-| `testing` | 🧪 Testing | Amber |
-| `done` | ✅ Done | Emerald |
-
----
-
-## 🤖 Agent API
-
-Agents authenticate with `X-Agent-API-Key: <AGENT_API_KEY>` and can:
-
-```
-GET    /api/tasks                    # List tasks (filter by status, assignedAgent)
-POST   /api/tasks                    # Create task
-PATCH  /api/tasks/:id               # Update task (status, assignedAgent, etc.)
-GET    /api/tasks/:id/comments       # Get comments
-POST   /api/tasks/:id/comments       # Add comment
-GET    /api/agents                   # List agents
-PATCH  /api/agents/:id/status        # Update agent status
-POST   /api/events                   # Emit event
-```
-
----
-
-## 🌿 Git Workflow
+## Git Workflow
 
 | Branch | Purpose |
 |--------|---------|
 | `master` | Production |
-| `dev` | Integration branch — all features merge here first |
-| `feature/*` | Feature branches → PR → `dev` |
+| `dev` | Integration branch |
+| `feature/*` | Feature branches |
 
-**Never push directly to `master`.**
+Never push directly to `master`.
 
 ---
 
-*Part of the [Harding Labs](https://github.com/davinharding) toolchain.*
+Part of the Harding Labs toolchain.

@@ -27,6 +27,16 @@ export function NotificationTray({
   const [open, setOpen] = React.useState(false);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  // Close on Escape key
+  React.useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
   return (
     <div className="relative">
       {/* Bell button */}

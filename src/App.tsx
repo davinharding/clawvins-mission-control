@@ -289,6 +289,8 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [showStats, setShowStats] = React.useState(false);
+  const [showMobileFilters, setShowMobileFilters] = React.useState(false);
+  const [showMobileSearch, setShowMobileSearch] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [showCostDashboard, setShowCostDashboard] = React.useState(false);
   const [taskStats, setTaskStats] = React.useState<TaskStatsResponse | null>(null);
@@ -1022,7 +1024,7 @@ export default function HomePage() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex-shrink-0 border-b border-border/60 bg-card/60 backdrop-blur">
-        {/* ── MOBILE HEADER (lg:hidden) — stacked layout to avoid overflow ── */}
+        {/* ── MOBILE HEADER (lg:hidden) — compact toolbar ── */}
         <div className="lg:hidden px-3 py-2 space-y-2">
           {/* Row 1: MC V2 | CONNECTED | 🔔 */}
           <div className="flex items-center gap-2">
@@ -1046,111 +1048,188 @@ export default function HomePage() {
               }}
             />
           </div>
-          {/* Row 2: Search */}
-          <div className="flex">
-            <GlobalSearch
-              compact={true}
-              onOpenTask={(taskId) => {
-                setActiveTaskId(taskId);
-                setModalOpen(true);
-              }}
-            />
-          </div>
-          {/* Row 3: Actions (icon-only, 4-up grid) */}
-          <div className="grid grid-cols-4 gap-1.5">
+
+          {/* Row 2: Filters + category tabs + actions */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              aria-label={`Stats ${showStats ? "collapse" : "expand"}`}
-              onClick={() => setShowStats((v) => !v)}
-              className="flex items-center justify-center rounded-full border border-border/70 h-8 text-xs font-semibold transition hover:bg-muted/60"
+              aria-label={showMobileFilters ? "Collapse filters" : "Expand filters"}
+              onClick={() => setShowMobileFilters((v) => !v)}
+              className={cn(
+                "flex items-center justify-center rounded-full border border-border/70",
+                "h-8 w-8 text-xs font-semibold transition hover:bg-muted/60",
+                showMobileFilters ? "bg-muted/60" : ""
+              )}
             >
-              📊 {showStats ? "▲" : "▼"}
+              ☰
             </button>
-            <button
-              type="button"
-              aria-label={showCostDashboard ? "Show tasks" : "Show cost"}
-              onClick={() => setShowCostDashboard((v) => !v)}
-              className="flex items-center justify-center rounded-full border border-border/70 h-8 text-xs font-semibold transition hover:bg-muted/60"
-            >
-              {showCostDashboard ? "📋" : "💰"}
-            </button>
-            <button
-              type="button"
-              aria-label="Toggle event feed"
-              onClick={() => setShowEventFeed((v) => !v)}
-              className="flex items-center justify-center rounded-full border border-border/70 h-8 text-xs font-semibold transition hover:bg-muted/60"
-            >
-              ⚡
-            </button>
-            <button
-              type="button"
-              aria-label="New task"
-              onClick={handleAddTask}
-              disabled={loading}
-              className="flex items-center justify-center rounded-full border border-primary/60 bg-primary/10 text-primary h-8 text-xs font-semibold transition hover:bg-primary/20 disabled:opacity-50"
-            >
-              +
-            </button>
-          </div>
-          {/* Collapsible stats */}
-          {showStats && (
-            <DashboardStats
-              variant="compact"
-              stats={taskStats}
-              activeAgents={activityStats.activeAgents}
-              completedToday={activityStats.completedToday}
-              className="px-3 pb-2"
-            />
-          )}
-          {/* Row 2: Agent filter pills — horizontally scrollable */}
-          <div className="flex gap-1.5 overflow-x-auto px-3 py-1 scrollbar-hide">
-            {roles.map((role) => (
+            <div className="flex-1 overflow-x-auto scrollbar-hide">
+              <div className="flex gap-1.5 py-0.5">
+                {roles.map((role) => (
+                  <button
+                    key={role.value}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRole(role.value as AgentRole | "All");
+                      setSelectedAgentId(null);
+                    }}
+                    className={cn(
+                      "flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition",
+                      selectedRole === role.value
+                        ? "border-primary/60 bg-primary/10 text-primary"
+                        : "border-border/60 hover:bg-muted/60"
+                    )}
+                  >
+                    {role.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
               <button
-                key={role.value}
                 type="button"
-                onClick={() => {
-                  setSelectedRole(role.value as AgentRole | "All");
-                  setSelectedAgentId(null);
-                }}
+                aria-label={showMobileSearch ? "Collapse search" : "Expand search"}
+                onClick={() => setShowMobileSearch((v) => !v)}
                 className={cn(
-                  "flex-shrink-0 rounded-full border py-0.5 px-2.5 text-xs font-semibold transition",
-                  selectedRole === role.value
-                    ? "border-primary/60 bg-primary/10 text-primary"
-                    : "border-border/60 hover:bg-muted/60"
+                  "flex items-center justify-center rounded-full border border-border/70",
+                  "h-8 w-8 text-xs font-semibold transition hover:bg-muted/60",
+                  showMobileSearch ? "bg-muted/60" : ""
                 )}
               >
-                {role.label}
+                🔍
               </button>
-            ))}
-            <div className="flex-shrink-0 w-px bg-border/60 self-stretch my-0.5" />
-            {visibleAgents.map((agent) => {
-              const emoji = getAgentEmoji(agent.name);
-              return (
-                <button
-                  key={agent.id}
-                  type="button"
-                  onClick={() =>
-                    setSelectedAgentId(agent.id === selectedAgentId ? null : agent.id)
-                  }
-                  className={cn(
-                    "flex-shrink-0 flex items-center gap-1 rounded-full border py-0.5 px-2 text-xs font-semibold transition",
-                    selectedAgentId === agent.id
-                      ? "border-primary/60 bg-primary/10 text-primary"
-                      : "border-border/60 hover:bg-muted/60"
-                  )}
-                >
-                  <span>{emoji ?? agent.name[0]}</span>
-                  <span>{agent.name.split(" ")[0]}</span>
-                  <span className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", statusColor[agent.status])} />
-                </button>
-              );
-            })}
+              <button
+                type="button"
+                aria-label={`Stats ${showStats ? "collapse" : "expand"}`}
+                onClick={() => setShowStats((v) => !v)}
+                className={cn(
+                  "flex items-center justify-center rounded-full border border-border/70",
+                  "h-8 w-8 text-xs font-semibold transition hover:bg-muted/60",
+                  showStats ? "bg-muted/60" : ""
+                )}
+              >
+                📊
+              </button>
+              <button
+                type="button"
+                aria-label={showCostDashboard ? "Show tasks" : "Show cost"}
+                onClick={() => setShowCostDashboard((v) => !v)}
+                className="flex items-center justify-center rounded-full border border-border/70 h-8 w-8 text-xs font-semibold transition hover:bg-muted/60"
+              >
+                {showCostDashboard ? "📋" : "💰"}
+              </button>
+              <button
+                type="button"
+                aria-label="Toggle event feed"
+                onClick={() => setShowEventFeed((v) => !v)}
+                className={cn(
+                  "flex items-center justify-center rounded-full border border-border/70",
+                  "h-8 w-8 text-xs font-semibold transition hover:bg-muted/60",
+                  showEventFeed ? "bg-muted/60" : ""
+                )}
+              >
+                ⚡
+              </button>
+              <button
+                type="button"
+                aria-label="New task"
+                onClick={handleAddTask}
+                disabled={loading}
+                className="flex items-center justify-center rounded-full border border-primary/60 bg-primary/10 text-primary h-8 w-8 text-xs font-semibold transition hover:bg-primary/20 disabled:opacity-50"
+              >
+                +
+              </button>
+            </div>
           </div>
+
+          {showMobileFilters && (
+            <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-2">
+              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <span>Agent Filters</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAgentId(null)}
+                  className="text-primary"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="mt-1.5 flex gap-1.5 overflow-x-auto scrollbar-hide">
+                {visibleAgents.map((agent) => {
+                  const emoji = getAgentEmoji(agent.name);
+                  return (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedAgentId(agent.id === selectedAgentId ? null : agent.id)
+                      }
+                      className={cn(
+                        "flex-shrink-0 flex items-center gap-1 rounded-full border py-0.5 px-2 text-[11px] font-semibold transition",
+                        selectedAgentId === agent.id
+                          ? "border-primary/60 bg-primary/10 text-primary"
+                          : "border-border/60 hover:bg-muted/60"
+                      )}
+                    >
+                      <span>{emoji ?? agent.name[0]}</span>
+                      <span>{agent.name.split(" ")[0]}</span>
+                      <span className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", statusColor[agent.status])} />
+                    </button>
+                  );
+                })}
+                {!visibleAgents.length && (
+                  <span className="text-[11px] text-muted-foreground">No agents online</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {showStats && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card/70 px-2 py-1 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                ✅ <span className="text-foreground">{activityStats.completedToday}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                🧑‍🚀 <span className="text-foreground">{activityStats.activeAgents}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                📌 <span className="text-foreground">{filteredTasks.length}</span>/{baseFilteredTasks.length}
+              </span>
+            </div>
+          )}
+
+          {!showCostDashboard && showMobileSearch && (
+            <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Task Search
+                </span>
+                <GlobalSearch
+                  compact={true}
+                  onOpenTask={(taskId) => {
+                    setActiveTaskId(taskId);
+                    setModalOpen(true);
+                  }}
+                />
+              </div>
+              <TaskSearchBar
+                query={searchQuery}
+                onQueryChange={handleSearchQueryChange}
+                tags={availableTags}
+                selectedTags={selectedTags}
+                onToggleTag={handleToggleTag}
+                onClear={handleClearTaskFilters}
+                filteredCount={filteredTasks.length}
+                totalCount={baseFilteredTasks.length}
+              />
+            </div>
+          )}
+
           {loading && (
-            <p className="text-xs text-muted-foreground px-3 pb-1">Loading...</p>
+            <p className="text-xs text-muted-foreground px-1">Loading...</p>
           )}
           {error && (
-            <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 mx-3 mb-2 px-3 py-1.5 text-xs text-rose-200">
+            <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-200">
               {error}
             </div>
           )}
@@ -1374,7 +1453,7 @@ export default function HomePage() {
             {/* Kanban Board - only show when not viewing cost dashboard */}
             {!showCostDashboard && (
               <>
-                <div className="mb-3">
+                <div className="mb-3 hidden lg:block">
                   <TaskSearchBar
                     query={searchQuery}
                     onQueryChange={handleSearchQueryChange}

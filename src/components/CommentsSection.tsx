@@ -1,4 +1,3 @@
-import * as React from "react";
 import type { Comment } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

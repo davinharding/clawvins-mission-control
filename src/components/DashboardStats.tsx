@@ -88,8 +88,6 @@ export function DashboardStats({
     (sum, status) => sum + (statusCounts[status] ?? 0),
     0
   );
-  const normalizedTotal = total || STATUS_ORDER.length;
-
   const sparklineValues = React.useMemo(() => getSparklineValues(stats), [stats]);
   const sparklinePoints = React.useMemo(
     () => buildSparklinePoints(sparklineValues, 80, 24),

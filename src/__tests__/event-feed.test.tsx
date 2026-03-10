@@ -1,13 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getFilteredEvents } from '@/components/EventFeed';
-import type { Agent, EventItem } from '@/lib/api';
-
-const agents: Agent[] = [
-  { id: 'a1', name: 'Ada Lovelace', role: 'Dev', status: 'online', lastActive: 1 },
-  { id: 'a2', name: 'Grace Hopper', role: 'Main', status: 'busy', lastActive: 2 },
-];
-
-const agentById = Object.fromEntries(agents.map((agent) => [agent.id, agent]));
+import type { EventItem } from '@/lib/api';
 
 const events: EventItem[] = [
   {

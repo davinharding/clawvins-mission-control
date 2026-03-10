@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/time";
@@ -57,6 +56,7 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { BulkActionBar } from "@/components/BulkActionBar";
 import { CostDashboard } from "@/components/CostDashboard";
+import { EventFeed } from "@/components/EventFeed";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -194,9 +194,6 @@ const getAgentEmoji = (name: string): string | null => {
   return agentEmojiMap[key] ?? null;
 };
 
-const formatTime = (value: number) =>
-  new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
 const useRelativeTime = (intervalMs = 60_000) => {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
@@ -204,17 +201,6 @@ const useRelativeTime = (intervalMs = 60_000) => {
     return () => window.clearInterval(id);
   }, [intervalMs]);
   return now;
-};
-
-const eventIcon: Record<string, string> = {
-  message_received: "📨",
-  agent_response:   "💬",
-  tool_call:        "🔧",
-  task_created:     "📋",
-  task_updated:     "↕️",
-  task_assigned:    "👤",
-  comment_created:  "💬",
-  session_started:  "🟢",
 };
 
 const upsertById = <T extends { id: string }>(items: T[], item: T, prepend = false) => {
@@ -944,6 +930,28 @@ export default function HomePage() {
     }, {});
   }, [agents]);
 
+  const handleRefreshEvents = React.useCallback(async () => {
+    try {
+      console.log("[Refresh] Fetching events...");
+      const eventsResponse = await getEvents();
+      console.log("[Refresh] Received:", eventsResponse.events.length, "events");
+      setEvents([...eventsResponse.events]);
+      console.log("[Refresh] State updated");
+    } catch (err) {
+      console.error("[Refresh] Error:", err);
+    }
+  }, []);
+
+  const handleSelectEvent = React.useCallback(
+    (event: EventItem) => {
+      setSelectedEvent(event);
+      if (showEventFeed) {
+        setShowEventFeed(false);
+      }
+    },
+    [showEventFeed]
+  );
+
   const activeTask = React.useMemo(
     () => tasks.find((task) => task.id === activeTaskId) ?? null,
     [tasks, activeTaskId]
@@ -1238,62 +1246,25 @@ export default function HomePage() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile event feed overlay */}
         {showEventFeed && (
-          <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur">
-            <div 
-              className="flex flex-shrink-0 items-center justify-between border-b border-border/60 px-4 py-3"
-              style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}
+          <div
+            className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur"
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowEventFeed(false)}
+              className="absolute right-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg border border-border/70 text-muted-foreground hover:bg-muted/60 transition"
+              style={{ top: "12px" }}
+              aria-label="Close event feed"
             >
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Live Feed</p>
-                <h3 className="text-lg font-semibold">Agent Events</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowEventFeed(false)}
-                className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg border border-border/70 text-muted-foreground hover:bg-muted/60 transition"
-                aria-label="Close event feed"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="space-y-4">
-                {events.map((event, index) => {
-                  const agent = event.agentId ? agentById[event.agentId] : null;
-                  const isNew = index === 0;
-                  const icon = eventIcon[event.type] ?? "⚡";
-                  return (
-                    <button
-                      key={event.id}
-                      type="button"
-                      onClick={() => { setSelectedEvent(event); setShowEventFeed(false); }}
-                      className={cn(
-                        "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
-                        isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
-                      )}
-                    >
-                      <span className="text-base flex-shrink-0 pt-0.5">{icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold truncate">{agent?.name ?? "System"}</p>
-                          {event.detail?.channelName && event.detail.channelName !== "unknown" && (
-                            <span className="text-[10px] text-muted-foreground font-mono truncate">
-                              {event.detail.channelName}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          <LinkifiedText text={event.message} />
-                        </p>
-                      </div>
-                      <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
-                        {formatTime(event.timestamp)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              ✕
+            </button>
+            <EventFeed
+              events={events}
+              agentById={agentById}
+              onSelectEvent={handleSelectEvent}
+              onRefresh={handleRefreshEvents}
+            />
           </div>
         )}
 
@@ -1730,81 +1701,12 @@ export default function HomePage() {
           {/* RIGHT SIDEBAR - Event Feed (desktop only; mobile uses overlay) */}
           <aside className="hidden lg:flex h-full min-h-0 flex-col">
             <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
-              <div className="flex-shrink-0 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-                      Live Feed
-                    </p>
-                    <h3 className="text-lg font-semibold">Agent Events</h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">Realtime</Badge>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      data-testid="refresh-button"
-                      onClick={async () => {
-                        try {
-                          console.log('[Refresh] Fetching events...');
-                          const eventsResponse = await getEvents();
-                          console.log('[Refresh] Received:', eventsResponse.events.length, 'events');
-                          // Force complete replacement with new array reference
-                          setEvents([...eventsResponse.events]);
-                          console.log('[Refresh] State updated');
-                        } catch (err) {
-                          console.error('[Refresh] Error:', err);
-                        }
-                      }}
-                      className="h-7 px-2"
-                      aria-label="Refresh events"
-                    >
-                      ↻
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <Separator className="flex-shrink-0" />
-              {/* Event List - scrollable with native overflow */}
-              <div className="flex-1 overflow-y-auto p-4" data-testid="event-feed">
-                <div className="space-y-4">
-                  {events.map((event, index) => {
-                    const agent = event.agentId ? agentById[event.agentId] : null;
-                    const isNew = index === 0; // First item is newest
-                    const icon = eventIcon[event.type] ?? "⚡";
-                    return (
-                      <button
-                        key={event.id}
-                        type="button"
-                        data-testid="event-item"
-                        onClick={() => setSelectedEvent(event)}
-                        className={cn(
-                          "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
-                          isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
-                        )}
-                      >
-                        <span className="text-base flex-shrink-0 pt-0.5">{icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold truncate">{agent?.name ?? "System"}</p>
-                            {event.detail?.channelName && event.detail.channelName !== "unknown" && (
-                              <span className="text-[10px] text-muted-foreground font-mono truncate">
-                                {event.detail.channelName}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            <LinkifiedText text={event.message} />
-                          </p>
-                        </div>
-                        <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
-                          {formatTime(event.timestamp)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <EventFeed
+                events={events}
+                agentById={agentById}
+                onSelectEvent={handleSelectEvent}
+                onRefresh={handleRefreshEvents}
+              />
             </div>
           </aside>
         </div>

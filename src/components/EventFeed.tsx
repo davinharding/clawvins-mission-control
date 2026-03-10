@@ -40,7 +40,37 @@ type EventFeedProps = {
   onRefresh: () => Promise<void>;
 };
 
-type FilterType = "all" | "tasks" | "messages" | "tools" | "system";
+export type FilterType = "all" | "tasks" | "messages" | "tools" | "system";
+
+export const filterEventsByAgent = (events: EventItem[], selectedAgent: string) => {
+  if (selectedAgent === "all") return events;
+  return events.filter((event) => event.agentId === selectedAgent);
+};
+
+export const filterEventsByType = (events: EventItem[], selectedType: FilterType) => {
+  if (selectedType === "all") return events;
+  if (selectedType === "tasks") {
+    return events.filter((event) => taskEventTypes.has(event.type));
+  }
+  if (selectedType === "messages") {
+    return events.filter((event) => messageEventTypes.has(event.type));
+  }
+  if (selectedType === "tools") {
+    return events.filter((event) => toolEventTypes.has(event.type));
+  }
+  return events.filter(
+    (event) =>
+      !taskEventTypes.has(event.type) &&
+      !messageEventTypes.has(event.type) &&
+      !toolEventTypes.has(event.type)
+  );
+};
+
+export const getFilteredEvents = (
+  events: EventItem[],
+  selectedType: FilterType,
+  selectedAgent: string
+) => filterEventsByType(filterEventsByAgent(events, selectedAgent), selectedType);
 
 export function EventFeed({ events, agentById, onSelectEvent, onRefresh }: EventFeedProps) {
   const [selectedType, setSelectedType] = React.useState<FilterType>("all");
@@ -54,10 +84,10 @@ export function EventFeed({ events, agentById, onSelectEvent, onRefresh }: Event
     ];
   }, [agentById]);
 
-  const agentFilteredEvents = React.useMemo(() => {
-    if (selectedAgent === "all") return events;
-    return events.filter((event) => event.agentId === selectedAgent);
-  }, [events, selectedAgent]);
+  const agentFilteredEvents = React.useMemo(
+    () => filterEventsByAgent(events, selectedAgent),
+    [events, selectedAgent]
+  );
 
   const counts = React.useMemo(() => {
     let tasks = 0;
@@ -92,24 +122,10 @@ export function EventFeed({ events, agentById, onSelectEvent, onRefresh }: Event
     [counts]
   );
 
-  const filteredEvents = React.useMemo(() => {
-    if (selectedType === "all") return agentFilteredEvents;
-    if (selectedType === "tasks") {
-      return agentFilteredEvents.filter((event) => taskEventTypes.has(event.type));
-    }
-    if (selectedType === "messages") {
-      return agentFilteredEvents.filter((event) => messageEventTypes.has(event.type));
-    }
-    if (selectedType === "tools") {
-      return agentFilteredEvents.filter((event) => toolEventTypes.has(event.type));
-    }
-    return agentFilteredEvents.filter(
-      (event) =>
-        !taskEventTypes.has(event.type) &&
-        !messageEventTypes.has(event.type) &&
-        !toolEventTypes.has(event.type)
-    );
-  }, [agentFilteredEvents, selectedType]);
+  const filteredEvents = React.useMemo(
+    () => filterEventsByType(agentFilteredEvents, selectedType),
+    [agentFilteredEvents, selectedType]
+  );
 
   const handleRefresh = React.useCallback(() => {
     void onRefresh();

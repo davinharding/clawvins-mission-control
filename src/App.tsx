@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/time";
 import type {
   Agent,
   AgentRole,
@@ -195,6 +196,15 @@ const getAgentEmoji = (name: string): string | null => {
 const formatTime = (value: number) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+const useRelativeTime = (intervalMs = 60_000) => {
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return now;
+};
+
 const eventIcon: Record<string, string> = {
   message_received: "📨",
   agent_response:   "💬",
@@ -310,6 +320,7 @@ export default function HomePage() {
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = React.useState<EventItem | null>(null);
+  const relativeNow = useRelativeTime();
 
   // Multi-select state
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<string>>(new Set());
@@ -1534,6 +1545,11 @@ export default function HomePage() {
                                           </Badge>
                                         </div>
                                       </div>
+                                      {task.description && (
+                                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                          {task.description}
+                                        </p>
+                                      )}
                                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                                         <div className="flex items-center gap-3">
                                           {agent ? (() => {
@@ -1552,7 +1568,7 @@ export default function HomePage() {
                                           )}
                                           <span>{agent?.name ?? "Unassigned"}</span>
                                         </div>
-                                        <span className="font-mono">{formatTime(timestamp)}</span>
+                                        <span className="font-mono">{formatRelativeTime(timestamp, relativeNow)}</span>
                                       </div>
                                       {(task.commentCount ?? 0) > 0 && (
                                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1589,6 +1605,11 @@ export default function HomePage() {
                             {priority}
                           </Badge>
                         </div>
+                        {task.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                            {task.description}
+                          </p>
+                        )}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           {agent ? (() => {
                             const emoji = getAgentEmoji(agent.name);

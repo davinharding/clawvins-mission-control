@@ -1,23 +1,18 @@
 export function formatRelativeTime(value: number, now = Date.now()) {
-  const diff = value - now;
-  const seconds = Math.round(diff / 1000);
-  const absSeconds = Math.abs(seconds);
-  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const diffMs = now - value;
+  if (diffMs < 60_000) return "just now";
 
-  if (absSeconds < 60) return rtf.format(seconds, "second");
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) return `${minutes}m ago`;
 
-  const minutes = Math.round(seconds / 60);
-  if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
+  const hours = Math.floor(diffMs / 3_600_000);
+  if (hours < 24) return `${hours}h ago`;
 
-  const hours = Math.round(minutes / 60);
-  if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
+  const days = Math.floor(diffMs / 86_400_000);
+  if (days < 7) return `${days}d ago`;
 
-  const days = Math.round(hours / 24);
-  if (Math.abs(days) < 30) return rtf.format(days, "day");
-
-  const months = Math.round(days / 30);
-  if (Math.abs(months) < 12) return rtf.format(months, "month");
-
-  const years = Math.round(months / 12);
-  return rtf.format(years, "year");
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }

@@ -17,6 +17,20 @@ export type Task = {
   commentCount?: number;
 };
 
+export type TaskStatusCounts = Record<Exclude<TaskStatus, 'archived'>, number>;
+
+export type DailyCompletion = {
+  date: string;
+  count: number;
+};
+
+export type TaskStatsResponse = {
+  statusCounts: TaskStatusCounts;
+  dailyCompletions: DailyCompletion[];
+  thisWeekTotal: number;
+  prevWeekTotal: number;
+};
+
 export type Agent = {
   id: string;
   name: string;
@@ -230,6 +244,12 @@ export async function getTasks(params?: { status?: TaskStatus; agent?: string })
   if (params?.agent) search.set('agent', params.agent);
   const query = search.toString();
   return request<{ tasks: Task[] }>(`/tasks${query ? `?${query}` : ''}`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function getTaskStats() {
+  return request<TaskStatsResponse>('/tasks/stats', {
     headers: authHeaders(),
   });
 }

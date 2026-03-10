@@ -22,12 +22,14 @@ import {
   getTasks,
   getArchivedTasks,
   getToken,
+  getTaskStats,
   login,
   setToken,
   storeCredentials,
   updateTask,
   deleteTask,
-  type Comment
+  type Comment,
+  type TaskStatsResponse
 } from "@/lib/api";
 import { createSocket, type ConnectionState } from "@/lib/socket";
 import { TaskEditModal } from "@/components/TaskEditModal";
@@ -57,6 +59,7 @@ import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { BulkActionBar } from "@/components/BulkActionBar";
 import { CostDashboard } from "@/components/CostDashboard";
 import { EventFeed } from "@/components/EventFeed";
+import { DashboardStats } from "@/components/DashboardStats";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -288,6 +291,7 @@ export default function HomePage() {
   const [showStats, setShowStats] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [showCostDashboard, setShowCostDashboard] = React.useState(false);
+  const [taskStats, setTaskStats] = React.useState<TaskStatsResponse | null>(null);
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [events, setEvents] = React.useState<EventItem[]>([]);
@@ -372,11 +376,12 @@ export default function HomePage() {
           setTokenState(activeToken);
         }
 
-        const [tasksResponse, agentsResponse, eventsResponse, archivedResponse] = await Promise.all([
+        const [tasksResponse, agentsResponse, eventsResponse, archivedResponse, statsResponse] = await Promise.all([
           getTasks(),
           getAgents(),
           getEvents(),
           getArchivedTasks(),
+          getTaskStats(),
         ]);
 
         if (!mounted) return;
@@ -385,6 +390,7 @@ export default function HomePage() {
         setAgents(agentsResponse.agents);
         setEvents(mergeEvents([], eventsResponse.events));
         setArchivedTasks(archivedResponse.tasks);
+        setTaskStats(statsResponse);
       } catch (err) {
         if (!mounted) return;
         const errorMsg = err instanceof Error ? err.message : "Failed to load mission data";
@@ -408,6 +414,15 @@ export default function HomePage() {
     };
   }, []);
 
+  const refreshTaskStats = React.useCallback(async () => {
+    try {
+      const statsResponse = await getTaskStats();
+      setTaskStats(statsResponse);
+    } catch (err) {
+      console.error("[Stats] Failed to refresh task stats:", err);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (!token) return;
 
@@ -422,6 +437,7 @@ export default function HomePage() {
     socket.on("task.created", (payload: TaskPayload) => {
       console.log('[WebSocket] Task created:', payload.task.id);
       setTasks((prev) => upsertById(prev, payload.task, true));
+      refreshTaskStats();
       addNotification({
         type: "task_created",
         title: "New task created",
@@ -436,11 +452,13 @@ export default function HomePage() {
         // Move from board to archive
         setTasks((prev) => prev.filter((t) => t.id !== payload.task.id));
         setArchivedTasks((prev) => upsertById(prev, payload.task, true));
+        refreshTaskStats();
         return;
       }
       // If a task comes back from archive to any board status
       setArchivedTasks((prev) => prev.filter((t) => t.id !== payload.task.id));
       setTasks((prev) => upsertById(prev, payload.task));
+      refreshTaskStats();
       if (payload.task.status === "done") {
         addNotification({
           type: "task_completed",
@@ -468,6 +486,7 @@ export default function HomePage() {
     socket.on("task.deleted", (payload: TaskDeletedPayload) => {
       console.log('[WebSocket] Task deleted:', payload.taskId);
       setTasks((prev) => prev.filter((task) => task.id !== payload.taskId));
+      refreshTaskStats();
       const currentTaskId = activeTaskIdRef.current;
       setActiveTaskId((prev) => (prev === payload.taskId ? null : prev));
       setModalOpen((prev) => (currentTaskId === payload.taskId ? false : prev));
@@ -520,6 +539,7 @@ export default function HomePage() {
       Promise.all([getTasks(), getArchivedTasks()]).then(([tasksRes, archiveRes]) => {
         setTasks(tasksRes.tasks);
         setArchivedTasks(archiveRes.tasks);
+        refreshTaskStats();
         if (payload.count > 0) {
           addNotification({
             type: "task_moved",
@@ -541,7 +561,7 @@ export default function HomePage() {
       unsubscribe();
       socket.disconnect();
     };
-  }, [token]);
+  }, [token, refreshTaskStats]);
 
   const visibleAgents = React.useMemo(() => {
     if (selectedRole === "All") return agents;
@@ -603,31 +623,13 @@ export default function HomePage() {
     return next;
   }, [baseFilteredTasks, searchQuery, selectedTags]);
 
-  const stats = React.useMemo(() => {
-    const completed = tasks.filter((task) => task.status === "done");
-    const today = new Date();
-    const completedToday = completed.filter((task) => {
-      const date = new Date(task.updatedAt ?? task.createdAt);
-      return (
-        date.getFullYear() === today.getFullYear() &&
-        date.getMonth() === today.getMonth() &&
-        date.getDate() === today.getDate()
-      );
-    });
+  const activityStats = React.useMemo(() => {
     const activeAgents = agents.filter((agent) => agent.status !== "offline").length;
-    const avgCompletion = completed.length
-      ? completed.reduce((sum, task) => sum + (task.updatedAt - task.createdAt), 0) /
-        completed.length /
-        36e5
+    const completedToday = taskStats?.dailyCompletions?.length
+      ? taskStats.dailyCompletions[taskStats.dailyCompletions.length - 1].count
       : 0;
-
-    return {
-      total: tasks.length,
-      completedToday: completedToday.length,
-      activeAgents,
-      avgCompletion: avgCompletion.toFixed(1)
-    };
-  }, [agents, tasks]);
+    return { activeAgents, completedToday };
+  }, [agents, taskStats]);
 
   const handleSearchQueryChange = React.useCallback((value: string) => {
     setSearchQuery(value);
@@ -662,16 +664,18 @@ export default function HomePage() {
       setLoginPassword("");
       // Re-trigger bootstrap by calling it directly
       setLoading(true);
-      const [tasksResponse, agentsResponse, eventsResponse, archivedResponse] = await Promise.all([
+      const [tasksResponse, agentsResponse, eventsResponse, archivedResponse, statsResponse] = await Promise.all([
         getTasks(),
         getAgents(),
         getEvents(),
         getArchivedTasks(),
+        getTaskStats(),
       ]);
       setTasks(tasksResponse.tasks);
       setAgents(agentsResponse.agents);
       setEvents(mergeEvents([], eventsResponse.events));
       setArchivedTasks(archivedResponse.tasks);
+      setTaskStats(statsResponse);
     } catch (err) {
       setLoginError(err instanceof Error ? err.message : "Invalid username or password");
     } finally {
@@ -1080,24 +1084,13 @@ export default function HomePage() {
           </div>
           {/* Collapsible stats */}
           {showStats && (
-            <div className="grid grid-cols-4 gap-1.5 px-3 pb-2">
-              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
-                <span className="text-[10px] text-muted-foreground">Total</span>
-                <span className="text-sm font-semibold">{stats.total}</span>
-              </div>
-              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
-                <span className="text-[10px] text-muted-foreground">Done</span>
-                <span className="text-sm font-semibold">{stats.completedToday}</span>
-              </div>
-              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
-                <span className="text-[10px] text-muted-foreground">Agents</span>
-                <span className="text-sm font-semibold">{stats.activeAgents}</span>
-              </div>
-              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-card/70 px-1 py-1.5">
-                <span className="text-[10px] text-muted-foreground">Avg</span>
-                <span className="text-sm font-semibold">{stats.avgCompletion}h</span>
-              </div>
-            </div>
+            <DashboardStats
+              variant="compact"
+              stats={taskStats}
+              activeAgents={activityStats.activeAgents}
+              completedToday={activityStats.completedToday}
+              className="px-3 pb-2"
+            />
           )}
           {/* Row 2: Agent filter pills — horizontally scrollable */}
           <div className="flex gap-1.5 overflow-x-auto px-3 py-1 scrollbar-hide">
@@ -1212,23 +1205,13 @@ export default function HomePage() {
                   {showCostDashboard ? "📋 Tasks" : "💰 Cost"}
                 </button>
               </div>
-              <div className={cn("w-full flex flex-wrap gap-3 text-sm", showStats ? "flex" : "hidden")}>
-                <Card className="flex items-center gap-3 px-4 py-3">
-                  <div className="text-muted-foreground text-sm">Total Tasks</div>
-                  <div className="text-2xl font-semibold">{stats.total}</div>
-                </Card>
-                <Card className="flex items-center gap-3 px-4 py-3">
-                  <div className="text-muted-foreground text-sm">Done Today</div>
-                  <div className="text-2xl font-semibold">{stats.completedToday}</div>
-                </Card>
-                <Card className="flex items-center gap-3 px-4 py-3">
-                  <div className="text-muted-foreground text-sm">Active Agents</div>
-                  <div className="text-2xl font-semibold">{stats.activeAgents}</div>
-                </Card>
-                <Card className="flex items-center gap-3 px-4 py-3">
-                  <div className="text-muted-foreground text-sm">Avg Completion</div>
-                  <div className="text-2xl font-semibold">{stats.avgCompletion}h</div>
-                </Card>
+              <div className={cn(showStats ? "block" : "hidden")}>
+                <DashboardStats
+                  variant="full"
+                  stats={taskStats}
+                  activeAgents={activityStats.activeAgents}
+                  completedToday={activityStats.completedToday}
+                />
               </div>
             </div>
           </div>

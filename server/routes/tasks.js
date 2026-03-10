@@ -3,6 +3,8 @@ import {
   getAllTasks,
   getArchivedTasks,
   getArchivedCount,
+  getTaskStatusCounts,
+  getWeeklyCompletionStats,
   getTaskById,
   createTask,
   updateTask,
@@ -48,6 +50,17 @@ router.get('/archived', (req, res) => {
     res.json({ tasks: tasks.map(formatTask), count });
   } catch (err) {
     console.error('Error fetching archived tasks:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/stats', (req, res) => {
+  try {
+    const statusCounts = getTaskStatusCounts();
+    const { dailyCompletions, thisWeekTotal, prevWeekTotal } = getWeeklyCompletionStats();
+    res.json({ statusCounts, dailyCompletions, thisWeekTotal, prevWeekTotal });
+  } catch (err) {
+    console.error('Error fetching task stats:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

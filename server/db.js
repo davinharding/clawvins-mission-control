@@ -275,6 +275,19 @@ const taskQueries = {
     UPDATE tasks SET status = 'archived', updated_at = ?
     WHERE status = 'done' AND done_at IS NULL AND updated_at < ?
   `),
+  getStatusCounts: db.prepare(`
+    SELECT status, COUNT(*) as count
+    FROM tasks
+    WHERE status IN ('backlog', 'todo', 'in-progress', 'testing', 'done')
+    GROUP BY status
+  `),
+  getDailyCompletionsSince: db.prepare(`
+    SELECT date(done_at / 1000, 'unixepoch') as date, COUNT(*) as count
+    FROM tasks
+    WHERE status = 'done' AND done_at IS NOT NULL AND done_at >= ?
+    GROUP BY date
+    ORDER BY date ASC
+  `),
   countArchived: db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE status = 'archived'`),
 };
 
@@ -335,6 +348,46 @@ export function getArchivedTasks() {
 
 export function getArchivedCount() {
   return taskQueries.countArchived.get().count;
+}
+
+export function getTaskStatusCounts() {
+  const rows = taskQueries.getStatusCounts.all();
+  const counts = {
+    backlog: 0,
+    todo: 0,
+    "in-progress": 0,
+    testing: 0,
+    done: 0,
+  };
+  for (const row of rows) {
+    if (row.status in counts) {
+      counts[row.status] = row.count;
+    }
+  }
+  return counts;
+}
+
+export function getWeeklyCompletionStats() {
+  const now = new Date();
+  const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 13));
+  const rows = taskQueries.getDailyCompletionsSince.all(startDate.getTime());
+  const rowMap = new Map(rows.map((row) => [row.date, row.count]));
+
+  const dailyCompletions = [];
+  for (let i = 13; i >= 0; i -= 1) {
+    const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+    const date = day.toISOString().slice(0, 10);
+    dailyCompletions.push({ date, count: rowMap.get(date) ?? 0 });
+  }
+
+  const prevWeekTotal = dailyCompletions
+    .slice(0, 7)
+    .reduce((sum, entry) => sum + entry.count, 0);
+  const thisWeekTotal = dailyCompletions
+    .slice(7)
+    .reduce((sum, entry) => sum + entry.count, 0);
+
+  return { dailyCompletions, thisWeekTotal, prevWeekTotal };
 }
 
 export function getTaskById(id) {

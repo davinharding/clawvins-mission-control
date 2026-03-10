@@ -10,7 +10,9 @@ type CommentsSectionProps = {
   comments: Comment[];
   loading: boolean;
   posting: boolean;
-  onPost: (text: string) => Promise<void>;
+  onPost: (text: string) => Promise<boolean>;
+  draftText: string;
+  onDraftChange: (text: string) => void;
 };
 
 export function CommentsSection({
@@ -18,14 +20,16 @@ export function CommentsSection({
   loading,
   posting,
   onPost,
+  draftText,
+  onDraftChange,
 }: CommentsSectionProps) {
-  const [text, setText] = React.useState("");
+  const text = draftText;
 
   const handleSubmit = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    await onPost(trimmed);
-    setText("");
+    const posted = await onPost(trimmed);
+    if (posted) onDraftChange("");
   };
 
   return (
@@ -49,7 +53,7 @@ export function CommentsSection({
       <div className="space-y-2">
         <Textarea
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => onDraftChange(event.target.value)}
           placeholder="Add a comment..."
           maxLength={1000}
           disabled={posting}

@@ -56,6 +56,7 @@ export function TaskEditModal({
   const [comments, setComments] = React.useState<Comment[]>([]);
   const [loadingComments, setLoadingComments] = React.useState(false);
   const [postingComment, setPostingComment] = React.useState(false);
+  const [newComment, setNewComment] = React.useState("");
 
   React.useEffect(() => {
     if (!task) return;
@@ -121,6 +122,13 @@ export function TaskEditModal({
       return;
     }
 
+    const trimmedComment = newComment.trim();
+    if (trimmedComment) {
+      const posted = await handlePostComment(trimmedComment);
+      if (!posted) return;
+      setNewComment("");
+    }
+
     const tags = tagsInput
       .split(",")
       .map((tag) => tag.trim())
@@ -169,18 +177,20 @@ export function TaskEditModal({
   };
 
   const handlePostComment = async (text: string) => {
-    if (!task) return;
+    if (!task) return false;
     setPostingComment(true);
     try {
       // Author is determined server-side from the auth token — no override passed
       const response = await createComment(task.id, text);
       setComments((prev) => upsertById(prev, response.comment));
+      return true;
     } catch (err) {
       notify({
         title: "Failed to post comment",
         description: err instanceof Error ? err.message : "Unexpected error",
         variant: "error",
       });
+      return false;
     } finally {
       setPostingComment(false);
     }
@@ -300,6 +310,8 @@ export function TaskEditModal({
           loading={loadingComments}
           posting={postingComment}
           onPost={handlePostComment}
+          draftText={newComment}
+          onDraftChange={setNewComment}
         />
         </div>{/* end scrollable body */}
 

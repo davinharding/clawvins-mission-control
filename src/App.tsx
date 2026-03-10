@@ -1022,10 +1022,10 @@ export default function HomePage() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex-shrink-0 border-b border-border/60 bg-card/60 backdrop-blur">
-        {/* ── MOBILE HEADER (lg:hidden) — 2 compact rows ── */}
-        <div className="lg:hidden">
-          {/* Row 1: MC V2 | CONNECTED | 🔔 | Stats▼ | ⚡Feed | + New */}
-          <div className="flex items-center gap-1.5 py-2 px-3">
+        {/* ── MOBILE HEADER (lg:hidden) — stacked layout to avoid overflow ── */}
+        <div className="lg:hidden px-3 py-2 space-y-2">
+          {/* Row 1: MC V2 | CONNECTED | 🔔 */}
+          <div className="flex items-center gap-2">
             <span className="text-xs font-semibold tracking-widest text-muted-foreground mr-auto">MC V2</span>
             <ConnectionStatus state={connectionState} />
             <NotificationTray
@@ -1045,27 +1045,9 @@ export default function HomePage() {
                 }
               }}
             />
-            <button
-              type="button"
-              onClick={() => setShowStats((v) => !v)}
-              className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
-            >
-              Stats {showStats ? "▲" : "▼"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCostDashboard((v) => !v)}
-              className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
-            >
-              {showCostDashboard ? "📋 Tasks" : "💰 Cost"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowEventFeed((v) => !v)}
-              className="flex items-center gap-0.5 rounded-full border border-border/70 py-0.5 px-2 text-xs font-semibold transition hover:bg-muted/60"
-            >
-              ⚡ Feed
-            </button>
+          </div>
+          {/* Row 2: Search */}
+          <div className="flex">
             <GlobalSearch
               compact={true}
               onOpenTask={(taskId) => {
@@ -1073,13 +1055,41 @@ export default function HomePage() {
                 setModalOpen(true);
               }}
             />
+          </div>
+          {/* Row 3: Actions (icon-only, 4-up grid) */}
+          <div className="grid grid-cols-4 gap-1.5">
             <button
               type="button"
+              aria-label={`Stats ${showStats ? "collapse" : "expand"}`}
+              onClick={() => setShowStats((v) => !v)}
+              className="flex items-center justify-center rounded-full border border-border/70 h-8 text-xs font-semibold transition hover:bg-muted/60"
+            >
+              📊 {showStats ? "▲" : "▼"}
+            </button>
+            <button
+              type="button"
+              aria-label={showCostDashboard ? "Show tasks" : "Show cost"}
+              onClick={() => setShowCostDashboard((v) => !v)}
+              className="flex items-center justify-center rounded-full border border-border/70 h-8 text-xs font-semibold transition hover:bg-muted/60"
+            >
+              {showCostDashboard ? "📋" : "💰"}
+            </button>
+            <button
+              type="button"
+              aria-label="Toggle event feed"
+              onClick={() => setShowEventFeed((v) => !v)}
+              className="flex items-center justify-center rounded-full border border-border/70 h-8 text-xs font-semibold transition hover:bg-muted/60"
+            >
+              ⚡
+            </button>
+            <button
+              type="button"
+              aria-label="New task"
               onClick={handleAddTask}
               disabled={loading}
-              className="flex items-center gap-0.5 rounded-full border border-primary/60 bg-primary/10 text-primary py-0.5 px-2 text-xs font-semibold transition hover:bg-primary/20 disabled:opacity-50"
+              className="flex items-center justify-center rounded-full border border-primary/60 bg-primary/10 text-primary h-8 text-xs font-semibold transition hover:bg-primary/20 disabled:opacity-50"
             >
-              + New
+              +
             </button>
           </div>
           {/* Collapsible stats */}

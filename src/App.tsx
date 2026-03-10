@@ -54,6 +54,7 @@ import { DraggableCard } from "@/components/DraggableCard";
 import { ArchivePanel } from "@/components/ArchivePanel";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { BulkActionBar } from "@/components/BulkActionBar";
 import { CostDashboard } from "@/components/CostDashboard";
 
@@ -296,6 +297,8 @@ const sortTasks = (items: Task[], sort: ColumnSort) => {
 export default function HomePage() {
   const [selectedRole, setSelectedRole] = React.useState<AgentRole | "All">("All");
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [showStats, setShowStats] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [showCostDashboard, setShowCostDashboard] = React.useState(false);
@@ -559,10 +562,12 @@ export default function HomePage() {
     return agents.filter((agent) => agent.role === selectedRole);
   }, [agents, selectedRole]);
 
-  const filteredTasks = React.useMemo(() => {
-    // Archived tasks never appear on the main board
-    const boardTasks = tasks.filter((task) => task.status !== "archived");
+  const boardTasks = React.useMemo(
+    () => tasks.filter((task) => task.status !== "archived"),
+    [tasks]
+  );
 
+  const baseFilteredTasks = React.useMemo(() => {
     // Filter by category (role) — only show tasks assigned to agents in the selected category
     const visibleAgentIds = new Set(visibleAgents.map((a) => a.id));
     const roleFiltered =
@@ -575,7 +580,42 @@ export default function HomePage() {
     // Further filter by a specific selected agent
     if (!selectedAgentId) return roleFiltered;
     return roleFiltered.filter((task) => task.assignedAgent === selectedAgentId);
-  }, [tasks, selectedAgentId, selectedRole, visibleAgents]);
+  }, [boardTasks, selectedAgentId, selectedRole, visibleAgents]);
+
+  const availableTags = React.useMemo(() => {
+    const tagMap = new Map<string, string>();
+    for (const task of boardTasks) {
+      for (const rawTag of task.tags ?? []) {
+        const tag = rawTag.trim();
+        if (!tag) continue;
+        const key = tag.toLowerCase();
+        if (!tagMap.has(key)) tagMap.set(key, tag);
+      }
+    }
+    return Array.from(tagMap.values()).sort((a, b) => a.localeCompare(b));
+  }, [boardTasks]);
+
+  const filteredTasks = React.useMemo(() => {
+    let next = baseFilteredTasks;
+
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (normalizedQuery) {
+      next = next.filter((task) =>
+        task.title.toLowerCase().includes(normalizedQuery)
+      );
+    }
+
+    if (selectedTags.length) {
+      const selected = selectedTags.map((tag) => tag.toLowerCase());
+      next = next.filter((task) => {
+        if (!task.tags?.length) return false;
+        const tagSet = new Set(task.tags.map((tag) => tag.toLowerCase()));
+        return selected.every((tag) => tagSet.has(tag));
+      });
+    }
+
+    return next;
+  }, [baseFilteredTasks, searchQuery, selectedTags]);
 
   const stats = React.useMemo(() => {
     const completed = tasks.filter((task) => task.status === "done");
@@ -602,6 +642,26 @@ export default function HomePage() {
       avgCompletion: avgCompletion.toFixed(1)
     };
   }, [agents, tasks]);
+
+  const handleSearchQueryChange = React.useCallback((value: string) => {
+    setSearchQuery(value);
+  }, []);
+
+  const handleToggleTag = React.useCallback((tag: string) => {
+    const key = tag.toLowerCase();
+    setSelectedTags((prev) => {
+      const exists = prev.some((existing) => existing.toLowerCase() === key);
+      if (exists) {
+        return prev.filter((existing) => existing.toLowerCase() !== key);
+      }
+      return [...prev, tag];
+    });
+  }, []);
+
+  const handleClearTaskFilters = React.useCallback(() => {
+    setSearchQuery("");
+    setSelectedTags([]);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1349,13 +1409,26 @@ export default function HomePage() {
 
             {/* Kanban Board - only show when not viewing cost dashboard */}
             {!showCostDashboard && (
-              <DndContext
-                sensors={sensors}
-                modifiers={[snapCenterToCursor]}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragCancel={() => setDraggingTaskId(null)}
-              >
+              <>
+                <div className="mb-3">
+                  <TaskSearchBar
+                    query={searchQuery}
+                    onQueryChange={handleSearchQueryChange}
+                    tags={availableTags}
+                    selectedTags={selectedTags}
+                    onToggleTag={handleToggleTag}
+                    onClear={handleClearTaskFilters}
+                    filteredCount={filteredTasks.length}
+                    totalCount={baseFilteredTasks.length}
+                  />
+                </div>
+                <DndContext
+                  sensors={sensors}
+                  modifiers={[snapCenterToCursor]}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDragCancel={() => setDraggingTaskId(null)}
+                >
               {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
               <div
                 className="flex flex-col gap-2 lg:hidden"
@@ -1650,6 +1723,7 @@ export default function HomePage() {
               {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
               {isSelecting && <div className="h-20 flex-shrink-0" />}
               </DndContext>
+              </>
             )}
           </section>
 

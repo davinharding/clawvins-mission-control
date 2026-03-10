@@ -122,9 +122,8 @@ export function TaskEditModal({
       return;
     }
 
-    const trimmedComment = newComment.trim();
-    if (trimmedComment) {
-      const posted = await handlePostComment(trimmedComment);
+    if (newComment.trim()) {
+      const posted = await handlePostComment();
       if (!posted) return;
       setNewComment("");
     }
@@ -176,12 +175,14 @@ export function TaskEditModal({
     }
   };
 
-  const handlePostComment = async (text: string) => {
+  const handlePostComment = async (text?: string) => {
     if (!task) return false;
+    const trimmed = (text ?? newComment).trim();
+    if (!trimmed) return false;
     setPostingComment(true);
     try {
       // Author is determined server-side from the auth token — no override passed
-      const response = await createComment(task.id, text);
+      const response = await createComment(task.id, trimmed);
       setComments((prev) => upsertById(prev, response.comment));
       return true;
     } catch (err) {

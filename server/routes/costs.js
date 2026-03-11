@@ -42,31 +42,21 @@ router.get('/', (req, res) => {
     let totalAnthropicCost = 0;
     let totalAnthropicTokens = 0;
 
-    // First pass: collect all openclaw-router entries to establish deduplication baseline
+    const now = Date.now();
+    const todayStart = new Date(now).setHours(0, 0, 0, 0);
+    const weekStart = now - (7 * 24 * 60 * 60 * 1000);
+    const monthStart = now - (30 * 24 * 60 * 60 * 1000);
+
+    let todayCost = 0;
+    let weekCost = 0;
+    let monthCost = 0;
+
+    const parsedEvents = [];
+
+    // First pass: parse once, precompute fields, and establish deduplication baseline
     for (const event of events) {
       if (!event.detail) continue;
-      
-      let detail;
-      try {
-        detail = JSON.parse(event.detail);
-      } catch {
-        continue;
-      }
 
-      if (!detail.cost || detail.cost === null) continue;
-
-      const source = event.source || 'openclaw-router';
-      if (source === 'openclaw-router') {
-        const model = detail.model || 'unknown';
-        const bucket = getBucketKey(event.timestamp, period);
-        routerSeen.add(`${model}:${bucket}`);
-      }
-    }
-
-    // Second pass: aggregate, skipping deduplicated entries
-    for (const event of events) {
-      if (!event.detail) continue;
-      
       let detail;
       try {
         detail = JSON.parse(event.detail);
@@ -82,9 +72,45 @@ router.get('/', (req, res) => {
       const agentId = event.agent_id || 'unknown';
       const timestamp = event.timestamp;
       const source = event.source || 'openclaw-router';
+      const bucketKey = getBucketKey(timestamp, period);
+      const isAnthropic = isAnthropicModel(model);
+
+      if (source === 'openclaw-router') {
+        routerSeen.add(`${model}:${bucketKey}`);
+      }
+
+      parsedEvents.push({
+        cost,
+        model,
+        tokens,
+        agentId,
+        timestamp,
+        source,
+        bucketKey,
+        isAnthropic,
+      });
+    }
+
+    // Second pass: aggregate, skipping deduplicated entries
+    for (const event of parsedEvents) {
+      const {
+        cost,
+        model,
+        tokens,
+        agentId,
+        timestamp,
+        source,
+        bucketKey,
+        isAnthropic,
+      } = event;
+
+      if (!isAnthropic) {
+        if (timestamp >= todayStart) todayCost += cost;
+        if (timestamp >= weekStart) weekCost += cost;
+        if (timestamp >= monthStart) monthCost += cost;
+      }
 
       // Deduplication: skip openai-usage-api entries if we already have router data for this model+bucket
-      const bucketKey = getBucketKey(timestamp, period);
       const dedupKey = `${model}:${bucketKey}`;
       
       if (source === 'openai-usage-api' && routerSeen.has(dedupKey)) {
@@ -92,13 +118,6 @@ router.get('/', (req, res) => {
         console.log(`[Costs] Deduplicated: ${model} at ${new Date(timestamp).toISOString()} ($${cost}) - already in router logs`);
         continue;
       }
-
-      // Determine if this is Anthropic (included in Max plan)
-      const isAnthropic = model.toLowerCase().includes('claude') || 
-                         model.toLowerCase().includes('anthropic') ||
-                         model.toLowerCase().includes('sonnet') ||
-                         model.toLowerCase().includes('opus') ||
-                         model.toLowerCase().includes('haiku');
 
       if (isAnthropic) {
         totalAnthropicCost += cost;
@@ -188,75 +207,6 @@ router.get('/', (req, res) => {
       }))
       .sort((a, b) => b.cost - a.cost);
 
-    // Calculate summary stats
-    const now = Date.now();
-    const todayStart = new Date(now).setHours(0, 0, 0, 0);
-    const weekStart = now - (7 * 24 * 60 * 60 * 1000);
-    const monthStart = now - (30 * 24 * 60 * 60 * 1000);
-
-    const todayCost = events
-      .filter(e => e.timestamp >= todayStart)
-      .reduce((sum, e) => {
-        if (!e.detail) return sum;
-        let detail;
-        try {
-          detail = JSON.parse(e.detail);
-        } catch {
-          return sum;
-        }
-        if (!detail.cost) return sum;
-        const cost = parseFloat(detail.cost) || 0;
-        const model = detail.model || '';
-        const isAnthropic = model.toLowerCase().includes('claude') || 
-                           model.toLowerCase().includes('anthropic') ||
-                           model.toLowerCase().includes('sonnet') ||
-                           model.toLowerCase().includes('opus') ||
-                           model.toLowerCase().includes('haiku');
-        return isAnthropic ? sum : sum + cost;
-      }, 0);
-
-    const weekCost = events
-      .filter(e => e.timestamp >= weekStart)
-      .reduce((sum, e) => {
-        if (!e.detail) return sum;
-        let detail;
-        try {
-          detail = JSON.parse(e.detail);
-        } catch {
-          return sum;
-        }
-        if (!detail.cost) return sum;
-        const cost = parseFloat(detail.cost) || 0;
-        const model = detail.model || '';
-        const isAnthropic = model.toLowerCase().includes('claude') || 
-                           model.toLowerCase().includes('anthropic') ||
-                           model.toLowerCase().includes('sonnet') ||
-                           model.toLowerCase().includes('opus') ||
-                           model.toLowerCase().includes('haiku');
-        return isAnthropic ? sum : sum + cost;
-      }, 0);
-
-    const monthCost = events
-      .filter(e => e.timestamp >= monthStart)
-      .reduce((sum, e) => {
-        if (!e.detail) return sum;
-        let detail;
-        try {
-          detail = JSON.parse(e.detail);
-        } catch {
-          return sum;
-        }
-        if (!detail.cost) return sum;
-        const cost = parseFloat(detail.cost) || 0;
-        const model = detail.model || '';
-        const isAnthropic = model.toLowerCase().includes('claude') || 
-                           model.toLowerCase().includes('anthropic') ||
-                           model.toLowerCase().includes('sonnet') ||
-                           model.toLowerCase().includes('opus') ||
-                           model.toLowerCase().includes('haiku');
-        return isAnthropic ? sum : sum + cost;
-      }, 0);
-
     res.json({
       summary: {
         totalBilledCost: parseFloat(totalBilledCost.toFixed(4)),
@@ -295,6 +245,15 @@ function extractProvider(model) {
   if (lower.includes('cohere')) return 'Cohere';
   if (lower.includes('openrouter')) return 'OpenRouter';
   return model;
+}
+
+function isAnthropicModel(model) {
+  const lower = (model || '').toLowerCase();
+  return lower.includes('claude') ||
+    lower.includes('anthropic') ||
+    lower.includes('sonnet') ||
+    lower.includes('opus') ||
+    lower.includes('haiku');
 }
 
 /**

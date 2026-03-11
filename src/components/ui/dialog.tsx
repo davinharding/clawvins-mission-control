@@ -25,7 +25,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 
 type DialogContentProps = React.HTMLAttributes<HTMLDivElement>;
 
-export function DialogContent({ className, children, ...props }: DialogContentProps) {
+export function DialogContent({ className, children, style, ...props }: DialogContentProps) {
   const context = React.useContext(DialogContext);
   const open = context?.open ?? false;
 
@@ -51,7 +51,6 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center sm:px-4"
       style={{
-        paddingTop: "max(0px, env(safe-area-inset-top))",
         paddingBottom: "max(0px, env(safe-area-inset-bottom))"
       }}
     >
@@ -66,9 +65,14 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
         aria-modal="true"
         className={cn(
           "relative z-10 w-full sm:max-w-3xl rounded-none sm:rounded-2xl border-0 sm:border border-border/70 bg-card/95 p-4 sm:p-6 shadow-2xl backdrop-blur",
+          "[--dialog-padding-top:1rem] sm:[--dialog-padding-top:1.5rem]",
           "flex flex-col h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-hidden sm:overflow-y-auto",
           className
         )}
+        style={{
+          paddingTop: "calc(var(--dialog-padding-top, 1rem) + env(safe-area-inset-top))",
+          ...style,
+        }}
         {...props}
       >
         {children}

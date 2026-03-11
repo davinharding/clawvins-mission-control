@@ -202,7 +202,7 @@ export function TaskEditModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader style={{ paddingTop: "max(0px, env(safe-area-inset-top))" }}>
+        <DialogHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
               <DialogTitle>Edit Task</DialogTitle>

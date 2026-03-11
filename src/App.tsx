@@ -290,6 +290,7 @@ export default function HomePage() {
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [showStats, setShowStats] = React.useState(false);
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
+  const [showAllTags, setShowAllTags] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [showCostDashboard, setShowCostDashboard] = React.useState(false);
   const [taskStats, setTaskStats] = React.useState<TaskStatsResponse | null>(null);
@@ -589,18 +590,50 @@ export default function HomePage() {
     return roleFiltered.filter((task) => task.assignedAgent === selectedAgentId);
   }, [boardTasks, selectedAgentId, selectedRole, visibleAgents]);
 
-  const availableTags = React.useMemo(() => {
-    const tagMap = new Map<string, string>();
+  const tagActivity = React.useMemo(() => {
+    const tagMap = new Map<string, { tag: string; count: number }>();
     for (const task of boardTasks) {
-      for (const rawTag of task.tags ?? []) {
-        const tag = rawTag.trim();
-        if (!tag) continue;
+      const taskTags = task.tags ?? [];
+      if (!taskTags.length) continue;
+      const uniqueTags = new Set(
+        taskTags.map((rawTag) => rawTag.trim()).filter(Boolean)
+      );
+      for (const tag of uniqueTags) {
         const key = tag.toLowerCase();
-        if (!tagMap.has(key)) tagMap.set(key, tag);
+        if (!tagMap.has(key)) {
+          tagMap.set(key, { tag, count: 0 });
+        }
+        if (task.status === "todo" || task.status === "in-progress") {
+          tagMap.get(key)!.count += 1;
+        }
       }
     }
-    return Array.from(tagMap.values()).sort((a, b) => a.localeCompare(b));
+    return Array.from(tagMap.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.tag.localeCompare(b.tag);
+    });
   }, [boardTasks]);
+
+  const availableTags = React.useMemo(
+    () => tagActivity.map((entry) => entry.tag),
+    [tagActivity]
+  );
+
+  const TAGS_COLLAPSE_COUNT = 6;
+
+  const visibleTagActivity = React.useMemo(() => {
+    if (showAllTags) return tagActivity;
+    const topTags = tagActivity.slice(0, TAGS_COLLAPSE_COUNT);
+    if (!selectedTags.length) return topTags;
+    const topKeys = new Set(topTags.map((entry) => entry.tag.toLowerCase()));
+    const selectedKeys = new Set(selectedTags.map((tag) => tag.toLowerCase()));
+    const extraSelected = tagActivity.filter(
+      (entry) => selectedKeys.has(entry.tag.toLowerCase()) && !topKeys.has(entry.tag.toLowerCase())
+    );
+    return [...topTags, ...extraSelected];
+  }, [showAllTags, tagActivity, selectedTags]);
+
+  const hasMoreTags = tagActivity.length > TAGS_COLLAPSE_COUNT;
 
   const activeTagSet = React.useMemo(
     () => new Set(selectedTags.map((tag) => tag.toLowerCase())),
@@ -1181,11 +1214,12 @@ export default function HomePage() {
                   </button>
                 )}
               </div>
-              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
-                {availableTags.length === 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {tagActivity.length === 0 && (
                   <span className="text-[11px] text-muted-foreground">No tags yet</span>
                 )}
-                {availableTags.map((tag) => {
+                {visibleTagActivity.map((entry) => {
+                  const tag = entry.tag;
                   const isActive = activeTagSet.has(tag.toLowerCase());
                   return (
                     <button
@@ -1205,6 +1239,15 @@ export default function HomePage() {
                   );
                 })}
               </div>
+              {hasMoreTags && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllTags((prev) => !prev)}
+                  className="text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
+                >
+                  {showAllTags ? "Show fewer tags" : "Show more tags"}
+                </button>
+              )}
             </div>
           )}
 

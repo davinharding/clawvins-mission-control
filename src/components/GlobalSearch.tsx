@@ -208,12 +208,11 @@ export function GlobalSearch({ onOpenTask, compact = false }: GlobalSearchProps)
           aria-label="Search tasks"
           onClick={() => setOpen(true)}
           className={cn(
-            "flex items-center justify-center rounded-lg border border-border/60 bg-muted/40",
-            "text-muted-foreground transition hover:bg-muted/70 hover:text-foreground",
-            "min-w-[44px] min-h-[44px] w-11 h-11"
+            "flex items-center justify-center rounded-full border border-border/70",
+            "h-8 w-8 text-xs font-semibold text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
           )}
         >
-          <span className="text-lg">🔍</span>
+          <span className="text-sm">🔍</span>
         </button>
       ) : (
         <button

@@ -290,7 +290,6 @@ export default function HomePage() {
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [showStats, setShowStats] = React.useState(false);
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
-  const [showMobileSearch, setShowMobileSearch] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [showCostDashboard, setShowCostDashboard] = React.useState(false);
   const [taskStats, setTaskStats] = React.useState<TaskStatsResponse | null>(null);
@@ -602,6 +601,11 @@ export default function HomePage() {
     }
     return Array.from(tagMap.values()).sort((a, b) => a.localeCompare(b));
   }, [boardTasks]);
+
+  const activeTagSet = React.useMemo(
+    () => new Set(selectedTags.map((tag) => tag.toLowerCase())),
+    [selectedTags]
+  );
 
   const filteredTasks = React.useMemo(() => {
     let next = baseFilteredTasks;
@@ -1025,7 +1029,7 @@ export default function HomePage() {
     <div className="flex h-screen flex-col">
       <header className="flex-shrink-0 border-b border-border/60 bg-card/60 backdrop-blur">
         {/* ── MOBILE HEADER (lg:hidden) — compact toolbar ── */}
-        <div className="lg:hidden px-3 py-2 space-y-2">
+        <div className="lg:hidden px-3 py-1.5 space-y-1.5">
           {/* Row 1: MC V2 | CONNECTED | 🔔 */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold tracking-widest text-muted-foreground mr-auto">MC V2</span>
@@ -1050,7 +1054,7 @@ export default function HomePage() {
           </div>
 
           {/* Row 2: Filters + category tabs + actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               aria-label={showMobileFilters ? "Collapse filters" : "Expand filters"}
@@ -1086,18 +1090,13 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label={showMobileSearch ? "Collapse search" : "Expand search"}
-                onClick={() => setShowMobileSearch((v) => !v)}
-                className={cn(
-                  "flex items-center justify-center rounded-full border border-border/70",
-                  "h-8 w-8 text-xs font-semibold transition hover:bg-muted/60",
-                  showMobileSearch ? "bg-muted/60" : ""
-                )}
-              >
-                🔍
-              </button>
+              <GlobalSearch
+                compact={true}
+                onOpenTask={(taskId) => {
+                  setActiveTaskId(taskId);
+                  setModalOpen(true);
+                }}
+              />
               <button
                 type="button"
                 aria-label={`Stats ${showStats ? "collapse" : "expand"}`}
@@ -1142,44 +1141,69 @@ export default function HomePage() {
             </div>
           </div>
 
-          {showMobileFilters && (
-            <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-2">
-              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <span>Agent Filters</span>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+            {visibleAgents.map((agent) => {
+              const emoji = getAgentEmoji(agent.name);
+              return (
                 <button
+                  key={agent.id}
                   type="button"
-                  onClick={() => setSelectedAgentId(null)}
-                  className="text-primary"
+                  onClick={() => setSelectedAgentId(agent.id === selectedAgentId ? null : agent.id)}
+                  className={cn(
+                    "flex-shrink-0 flex items-center gap-1 rounded-full border py-0.5 px-2 text-[11px] font-semibold transition",
+                    selectedAgentId === agent.id
+                      ? "border-primary/60 bg-primary/10 text-primary"
+                      : "border-border/60 hover:bg-muted/60"
+                  )}
                 >
-                  Clear
+                  <span>{emoji ?? agent.name[0]}</span>
+                  <span>{agent.name.split(" ")[0]}</span>
+                  <span className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", statusColor[agent.status])} />
                 </button>
+              );
+            })}
+            {!visibleAgents.length && (
+              <span className="text-[11px] text-muted-foreground">No agents online</span>
+            )}
+          </div>
+
+          {showMobileFilters && (
+            <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-1.5 space-y-1">
+              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <span>Tags</span>
+                {selectedTags.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearTaskFilters}
+                    className="text-primary"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-              <div className="mt-1.5 flex gap-1.5 overflow-x-auto scrollbar-hide">
-                {visibleAgents.map((agent) => {
-                  const emoji = getAgentEmoji(agent.name);
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+                {availableTags.length === 0 && (
+                  <span className="text-[11px] text-muted-foreground">No tags yet</span>
+                )}
+                {availableTags.map((tag) => {
+                  const isActive = activeTagSet.has(tag.toLowerCase());
                   return (
                     <button
-                      key={agent.id}
+                      key={tag}
                       type="button"
-                      onClick={() =>
-                        setSelectedAgentId(agent.id === selectedAgentId ? null : agent.id)
-                      }
-                      className={cn(
-                        "flex-shrink-0 flex items-center gap-1 rounded-full border py-0.5 px-2 text-[11px] font-semibold transition",
-                        selectedAgentId === agent.id
-                          ? "border-primary/60 bg-primary/10 text-primary"
-                          : "border-border/60 hover:bg-muted/60"
-                      )}
+                      onClick={() => handleToggleTag(tag)}
+                      aria-pressed={isActive}
+                      className="flex-shrink-0"
                     >
-                      <span>{emoji ?? agent.name[0]}</span>
-                      <span>{agent.name.split(" ")[0]}</span>
-                      <span className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", statusColor[agent.status])} />
+                      <Badge
+                        variant={isActive ? "default" : "outline"}
+                        className={cn("cursor-pointer text-[11px] py-0.5", !isActive && "hover:bg-muted/60")}
+                      >
+                        {tag}
+                      </Badge>
                     </button>
                   );
                 })}
-                {!visibleAgents.length && (
-                  <span className="text-[11px] text-muted-foreground">No agents online</span>
-                )}
               </div>
             </div>
           )}
@@ -1195,33 +1219,6 @@ export default function HomePage() {
               <span className="flex items-center gap-1">
                 📌 <span className="text-foreground">{filteredTasks.length}</span>/{baseFilteredTasks.length}
               </span>
-            </div>
-          )}
-
-          {!showCostDashboard && showMobileSearch && (
-            <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-2 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Task Search
-                </span>
-                <GlobalSearch
-                  compact={true}
-                  onOpenTask={(taskId) => {
-                    setActiveTaskId(taskId);
-                    setModalOpen(true);
-                  }}
-                />
-              </div>
-              <TaskSearchBar
-                query={searchQuery}
-                onQueryChange={handleSearchQueryChange}
-                tags={availableTags}
-                selectedTags={selectedTags}
-                onToggleTag={handleToggleTag}
-                onClear={handleClearTaskFilters}
-                filteredCount={filteredTasks.length}
-                totalCount={baseFilteredTasks.length}
-              />
             </div>
           )}
 

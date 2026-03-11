@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { CommentsSection } from "@/components/CommentsSection";
-import { LinkifiedText } from "@/components/LinkifiedText";
+import { renderMarkdown } from "@/lib/markdown";
 import { useToast } from "@/lib/toast";
 
 type TaskEditModalProps = {
@@ -51,6 +51,7 @@ export function TaskEditModal({
   const [assignedAgent, setAssignedAgent] = React.useState<string>("");
   const [status, setStatus] = React.useState<TaskStatus>("backlog");
   const [tagsInput, setTagsInput] = React.useState("");
+  const [descriptionMode, setDescriptionMode] = React.useState<"read" | "edit">("edit");
   const [saving, setSaving] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [comments, setComments] = React.useState<Comment[]>([]);
@@ -62,6 +63,7 @@ export function TaskEditModal({
     if (!task) return;
     setTitle(task.title);
     setDescription(task.description ?? "");
+    setDescriptionMode(task.description?.trim() ? "read" : "edit");
     setPriority((task.priority ?? "low") as TaskPriority);
     setAssignedAgent(task.assignedAgent ?? "");
     setStatus(task.status);
@@ -233,20 +235,37 @@ export function TaskEditModal({
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Description
-            </label>
-            <Textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              maxLength={2000}
-              placeholder="Describe the mission details..."
-              className="resize-y min-h-[80px] max-h-[200px] overflow-y-auto"
-            />
-            {/https?:\/\//.test(description) && (
-              <p className="rounded-md bg-muted/40 px-3 py-2 text-sm leading-relaxed break-words">
-                <LinkifiedText text={description} />
-              </p>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Description
+              </label>
+              <button
+                type="button"
+                onClick={() => setDescriptionMode((mode) => (mode === "read" ? "edit" : "read"))}
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground transition"
+              >
+                {descriptionMode === "read" ? "Edit" : "Preview"}
+              </button>
+            </div>
+            {descriptionMode === "read" ? (
+              <button
+                type="button"
+                onClick={() => setDescriptionMode("edit")}
+                className="w-full rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-left text-sm leading-relaxed hover:bg-muted/30 transition"
+              >
+                <div
+                  className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground [&_a]:break-words"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(description) }}
+                />
+              </button>
+            ) : (
+              <Textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                maxLength={2000}
+                placeholder="Describe the mission details..."
+                className="resize-y min-h-[80px] max-h-[200px] overflow-y-auto"
+              />
             )}
           </div>
           <div className="space-y-2">

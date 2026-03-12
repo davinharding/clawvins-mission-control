@@ -38,6 +38,9 @@ type EventFeedProps = {
   agentById: Record<string, Agent>;
   onSelectEvent: (event: EventItem) => void;
   onRefresh: () => Promise<void>;
+  onLoadMore: () => Promise<void>;
+  hasMore: boolean;
+  isLoadingMore: boolean;
 };
 
 export type FilterType = "all" | "tasks" | "messages" | "tools" | "system";
@@ -72,7 +75,15 @@ export const getFilteredEvents = (
   selectedAgent: string
 ) => filterEventsByType(filterEventsByAgent(events, selectedAgent), selectedType);
 
-export function EventFeed({ events, agentById, onSelectEvent, onRefresh }: EventFeedProps) {
+export function EventFeed({
+  events,
+  agentById,
+  onSelectEvent,
+  onRefresh,
+  onLoadMore,
+  hasMore,
+  isLoadingMore,
+}: EventFeedProps) {
   const [selectedType, setSelectedType] = React.useState<FilterType>("all");
   const [selectedAgent, setSelectedAgent] = React.useState("all");
 
@@ -217,6 +228,19 @@ export function EventFeed({ events, agentById, onSelectEvent, onRefresh }: Event
           {!filteredEvents.length && (
             <div className="rounded-xl border border-dashed border-border/70 p-4 text-center text-xs text-muted-foreground">
               No events match these filters.
+            </div>
+          )}
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+                className="border border-border/70 text-muted-foreground hover:bg-muted/60"
+              >
+                {isLoadingMore ? "Loading..." : "Load more"}
+              </Button>
             </div>
           )}
         </div>

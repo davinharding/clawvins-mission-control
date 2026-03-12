@@ -314,6 +314,7 @@ const agentQueries = {
 const eventQueries = {
   getRecent: db.prepare('SELECT * FROM events ORDER BY timestamp DESC LIMIT ?'),
   getSince: db.prepare('SELECT * FROM events WHERE timestamp > ? ORDER BY timestamp DESC'),
+  getBefore: db.prepare('SELECT * FROM events WHERE timestamp < ? ORDER BY timestamp DESC LIMIT ?'),
   getById: db.prepare('SELECT * FROM events WHERE id = ?'),
   create: db.prepare(`
     INSERT INTO events (id, type, message, agent_id, task_id, timestamp, detail)
@@ -523,6 +524,10 @@ export function getRecentEvents(limit = 50) {
 
 export function getEventsSince(timestamp) {
   return eventQueries.getSince.all(timestamp);
+}
+
+export function getEventsBefore(timestamp, limit = 50) {
+  return eventQueries.getBefore.all(timestamp, limit);
 }
 
 export function getEventById(id) {

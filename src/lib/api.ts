@@ -314,10 +314,11 @@ export async function updateAgent(id: string, updates: Partial<Agent>) {
   });
 }
 
-export async function getEvents(params?: { limit?: number; since?: number }) {
+export async function getEvents(params?: { limit?: number; since?: number; before?: number }) {
   const search = new URLSearchParams();
   if (params?.limit) search.set('limit', String(params.limit));
   if (params?.since) search.set('since', String(params.since));
+  if (params?.before !== undefined) search.set('before', String(params.before));
   const query = search.toString();
   return request<{ events: EventItem[] }>(`/events${query ? `?${query}` : ''}`, {
     headers: authHeaders(),

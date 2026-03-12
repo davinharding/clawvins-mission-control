@@ -232,6 +232,8 @@ const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
   return result;
 };
 
+const EVENTS_PAGE_LIMIT = 50;
+
 // Mobile droppable row — unique "mobile-{status}" IDs to avoid conflicts with desktop columns
 function MobileDropRow({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: `mobile-${id}` });
@@ -297,6 +299,8 @@ export default function HomePage() {
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [events, setEvents] = React.useState<EventItem[]>([]);
+  const [eventsHasMore, setEventsHasMore] = React.useState(true);
+  const [eventsLoadingMore, setEventsLoadingMore] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [token, setTokenState] = React.useState<string | null>(getToken());
@@ -381,7 +385,7 @@ export default function HomePage() {
         const [tasksResponse, agentsResponse, eventsResponse, archivedResponse, statsResponse] = await Promise.all([
           getTasks(),
           getAgents(),
-          getEvents(),
+          getEvents({ limit: EVENTS_PAGE_LIMIT }),
           getArchivedTasks(),
           getTaskStats(),
         ]);
@@ -391,6 +395,7 @@ export default function HomePage() {
         setTasks(tasksResponse.tasks);
         setAgents(agentsResponse.agents);
         setEvents(mergeEvents([], eventsResponse.events));
+        setEventsHasMore(eventsResponse.events.length >= EVENTS_PAGE_LIMIT);
         setArchivedTasks(archivedResponse.tasks);
         setTaskStats(statsResponse);
       } catch (err) {
@@ -706,13 +711,14 @@ export default function HomePage() {
       const [tasksResponse, agentsResponse, eventsResponse, archivedResponse, statsResponse] = await Promise.all([
         getTasks(),
         getAgents(),
-        getEvents(),
+        getEvents({ limit: EVENTS_PAGE_LIMIT }),
         getArchivedTasks(),
         getTaskStats(),
       ]);
       setTasks(tasksResponse.tasks);
       setAgents(agentsResponse.agents);
       setEvents(mergeEvents([], eventsResponse.events));
+      setEventsHasMore(eventsResponse.events.length >= EVENTS_PAGE_LIMIT);
       setArchivedTasks(archivedResponse.tasks);
       setTaskStats(statsResponse);
     } catch (err) {
@@ -976,14 +982,42 @@ export default function HomePage() {
   const handleRefreshEvents = React.useCallback(async () => {
     try {
       console.log("[Refresh] Fetching events...");
-      const eventsResponse = await getEvents();
+      const eventsResponse = await getEvents({ limit: EVENTS_PAGE_LIMIT });
       console.log("[Refresh] Received:", eventsResponse.events.length, "events");
       setEvents([...eventsResponse.events]);
+      setEventsHasMore(eventsResponse.events.length >= EVENTS_PAGE_LIMIT);
       console.log("[Refresh] State updated");
     } catch (err) {
       console.error("[Refresh] Error:", err);
     }
   }, []);
+
+  const handleLoadMoreEvents = React.useCallback(async () => {
+    if (eventsLoadingMore || !eventsHasMore) return;
+    if (!events.length) {
+      await handleRefreshEvents();
+      return;
+    }
+    const oldestTimestamp = events.reduce(
+      (min, event) => (event.timestamp < min ? event.timestamp : min),
+      events[0].timestamp
+    );
+    setEventsLoadingMore(true);
+    try {
+      const eventsResponse = await getEvents({
+        limit: EVENTS_PAGE_LIMIT,
+        before: oldestTimestamp,
+      });
+      setEvents((prev) => mergeEvents(prev, eventsResponse.events));
+      if (eventsResponse.events.length < EVENTS_PAGE_LIMIT) {
+        setEventsHasMore(false);
+      }
+    } catch (err) {
+      console.error("[Events] Load more failed:", err);
+    } finally {
+      setEventsLoadingMore(false);
+    }
+  }, [events, eventsHasMore, eventsLoadingMore, handleRefreshEvents]);
 
   const handleSelectEvent = React.useCallback(
     (event: EventItem) => {
@@ -1376,6 +1410,9 @@ export default function HomePage() {
               agentById={agentById}
               onSelectEvent={handleSelectEvent}
               onRefresh={handleRefreshEvents}
+              onLoadMore={handleLoadMoreEvents}
+              hasMore={eventsHasMore}
+              isLoadingMore={eventsLoadingMore}
             />
           </div>
         )}
@@ -1818,6 +1855,9 @@ export default function HomePage() {
                 agentById={agentById}
                 onSelectEvent={handleSelectEvent}
                 onRefresh={handleRefreshEvents}
+                onLoadMore={handleLoadMoreEvents}
+                hasMore={eventsHasMore}
+                isLoadingMore={eventsLoadingMore}
               />
             </div>
           </aside>

@@ -47,6 +47,7 @@ const schemas = {
   eventsQuery: z.object({
     limit: z.coerce.number().int().positive().optional(),
     since: z.coerce.number().int().optional(),
+    before: z.coerce.number().int().optional(),
   }),
   commentCreate: z.object({
     text: z.string().min(1).max(1000),

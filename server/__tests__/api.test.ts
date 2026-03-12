@@ -123,6 +123,8 @@ vi.mock('../db.js', () => {
     },
     getRecentEvents: () => state.events,
     getEventsSince: (timestamp: number) => state.events.filter((event) => event.timestamp >= timestamp),
+    getEventsBefore: (timestamp: number, limit = 50) =>
+      state.events.filter((event) => event.timestamp < timestamp).slice(0, limit),
     getEventById: (id: string) => state.events.find((event) => event.id === id) ?? null,
     createEvent: (data: any) => {
       const event = {

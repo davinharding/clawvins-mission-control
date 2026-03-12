@@ -1,5 +1,5 @@
 import express from 'express';
-import { getRecentEvents, getEventsSince } from '../db.js';
+import { getRecentEvents, getEventsSince, getEventsBefore } from '../db.js';
 import { schemas, validateQuery } from '../validation.js';
 
 const router = express.Router();
@@ -18,8 +18,16 @@ router.get('/', validateQuery(schemas.eventsQuery), (req, res) => {
   try {
     const limit = req.query.limit ?? 50;
     const since = req.query.since ?? null;
+    const before = req.query.before ?? null;
 
-    const events = since ? getEventsSince(since) : getRecentEvents(limit);
+    let events;
+    if (before) {
+      events = getEventsBefore(before, limit);
+    } else if (since) {
+      events = getEventsSince(since);
+    } else {
+      events = getRecentEvents(limit);
+    }
     res.json({ events: events.map(formatEvent) });
   } catch (err) {
     console.error('Error fetching events:', err);

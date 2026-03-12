@@ -9,221 +9,208 @@ const router = express.Router();
  */
 router.get('/', (req, res) => {
   try {
-    const period = req.query.period || 'day'; // hour, day, week, month
-    const limit = parseInt(req.query.limit) || 30;
-
-    // Get all events with cost data, including source
-    const events = db.prepare(`
-      SELECT 
-        id,
-        type,
-        message,
-        agent_id,
-        timestamp,
-        detail,
-        source
-      FROM events 
-      WHERE detail IS NOT NULL
-      ORDER BY timestamp DESC
-    `).all();
-
-    // Parse and aggregate
-    const costData = [];
-    const providerTotals = {};
-    const agentTotals = {};
-    const periodBuckets = {};
-    const sourceTotals = {};
-
-    // Deduplication: track what we've seen from openclaw-router
-    const routerSeen = new Set(); // model+bucketKey combinations
-    const dedupSkipped = [];
-
-    let totalBilledCost = 0;
-    let totalAnthropicCost = 0;
-    let totalAnthropicTokens = 0;
+    const period = normalizePeriod(req.query.period || 'day'); // hour, day, week, month
+    const limit = parseInt(req.query.limit, 10) || 30;
 
     const now = Date.now();
+    const defaultFrom = now - (30 * 24 * 60 * 60 * 1000);
+    const from = normalizeEpochMs(req.query.from, defaultFrom);
+    const to = normalizeEpochMs(req.query.to, now);
+    const fromTs = Math.min(from, to);
+    const toTs = Math.max(from, to);
+
     const todayStart = new Date(now).setHours(0, 0, 0, 0);
     const weekStart = now - (7 * 24 * 60 * 60 * 1000);
     const monthStart = now - (30 * 24 * 60 * 60 * 1000);
 
-    let todayCost = 0;
-    let weekCost = 0;
-    let monthCost = 0;
+    const baseCte = `
+      WITH base AS (
+        SELECT
+          id,
+          COALESCE(agent_id, 'unknown') AS agent_id,
+          timestamp,
+          COALESCE(source, 'openclaw-router') AS source,
+          CAST(json_extract(detail, '$.cost') AS REAL) AS cost,
+          CAST(COALESCE(json_extract(detail, '$.tokens'), 0) AS INTEGER) AS tokens,
+          COALESCE(json_extract(detail, '$.model'), 'unknown') AS model,
+          LOWER(COALESCE(json_extract(detail, '$.model'), '')) AS model_lower,
+          CASE ?
+            WHEN 'hour' THEN CAST(strftime('%s', datetime(timestamp / 1000, 'unixepoch', 'localtime', 'start of hour', 'utc')) AS INTEGER) * 1000
+            WHEN 'day' THEN CAST(strftime('%s', datetime(timestamp / 1000, 'unixepoch', 'localtime', 'start of day', 'utc')) AS INTEGER) * 1000
+            WHEN 'week' THEN CAST(strftime('%s', datetime(timestamp / 1000, 'unixepoch', 'localtime', '-' || ((CAST(strftime('%w', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) + 6) % 7) || ' days', 'start of day', 'utc')) AS INTEGER) * 1000
+            WHEN 'month' THEN CAST(strftime('%s', datetime(timestamp / 1000, 'unixepoch', 'localtime', 'start of month', 'utc')) AS INTEGER) * 1000
+            ELSE CAST(strftime('%s', datetime(timestamp / 1000, 'unixepoch', 'localtime', 'start of day', 'utc')) AS INTEGER) * 1000
+          END AS bucket_key
+        FROM events
+        WHERE detail IS NOT NULL
+          AND json_valid(detail) = 1
+          AND timestamp >= ?
+          AND timestamp <= ?
+          AND json_extract(detail, '$.cost') IS NOT NULL
+      ),
+      normalized AS (
+        SELECT
+          id,
+          agent_id,
+          timestamp,
+          source,
+          cost,
+          tokens,
+          model,
+          bucket_key,
+          CASE
+            WHEN model_lower LIKE '%claude%' OR model_lower LIKE '%anthropic%' OR model_lower LIKE '%sonnet%' OR model_lower LIKE '%opus%' OR model_lower LIKE '%haiku%'
+            THEN 1
+            ELSE 0
+          END AS is_anthropic,
+          CASE
+            WHEN model_lower LIKE '%claude%' OR model_lower LIKE '%anthropic%' OR model_lower LIKE '%sonnet%' OR model_lower LIKE '%opus%' OR model_lower LIKE '%haiku%'
+            THEN 'Anthropic (Max Plan)'
+            WHEN model_lower LIKE '%gpt%' OR model_lower LIKE '%openai%'
+            THEN 'OpenAI'
+            WHEN model_lower LIKE '%deepseek%'
+            THEN 'DeepSeek'
+            WHEN model_lower LIKE '%gemini%' OR model_lower LIKE '%google%'
+            THEN 'Google'
+            WHEN model_lower LIKE '%llama%' OR model_lower LIKE '%meta%'
+            THEN 'Meta'
+            WHEN model_lower LIKE '%mistral%'
+            THEN 'Mistral'
+            WHEN model_lower LIKE '%cohere%'
+            THEN 'Cohere'
+            WHEN model_lower LIKE '%openrouter%'
+            THEN 'OpenRouter'
+            ELSE model
+          END AS provider
+        FROM base
+      ),
+      deduped AS (
+        SELECT *
+        FROM normalized n
+        WHERE NOT (
+          n.source = 'openai-usage-api'
+          AND EXISTS (
+            SELECT 1 FROM normalized r
+            WHERE r.source = 'openclaw-router'
+              AND r.model = n.model
+              AND r.bucket_key = n.bucket_key
+          )
+        )
+      )
+    `;
 
-    const parsedEvents = [];
+    const summary = db.prepare(`
+      ${baseCte}
+      SELECT
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS totalBilledCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS totalAnthropicCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN tokens ELSE 0 END), 0) AS totalAnthropicTokens,
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS todayBilledCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS weekBilledCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS monthBilledCost
+      FROM deduped
+    `).get(period, fromTs, toTs, todayStart, weekStart, monthStart);
 
-    // First pass: parse once, precompute fields, and establish deduplication baseline
-    for (const event of events) {
-      if (!event.detail) continue;
+    const periodData = db.prepare(`
+      ${baseCte}
+      SELECT
+        bucket_key AS timestamp,
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS billedCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS anthropicCost,
+        COALESCE(SUM(cost), 0) AS totalCost,
+        COUNT(*) AS count
+      FROM deduped
+      GROUP BY bucket_key
+      ORDER BY bucket_key DESC
+      LIMIT ?
+    `).all(period, fromTs, toTs, limit);
 
-      let detail;
-      try {
-        detail = JSON.parse(event.detail);
-      } catch {
-        continue;
-      }
-
-      if (!detail.cost || detail.cost === null) continue;
-
-      const cost = parseFloat(detail.cost) || 0;
-      const model = detail.model || 'unknown';
-      const tokens = parseInt(detail.tokens) || 0;
-      const agentId = event.agent_id || 'unknown';
-      const timestamp = event.timestamp;
-      const source = event.source || 'openclaw-router';
-      const bucketKey = getBucketKey(timestamp, period);
-      const isAnthropic = isAnthropicModel(model);
-
-      if (source === 'openclaw-router') {
-        routerSeen.add(`${model}:${bucketKey}`);
-      }
-
-      parsedEvents.push({
-        cost,
-        model,
-        tokens,
-        agentId,
-        timestamp,
-        source,
-        bucketKey,
-        isAnthropic,
-      });
-    }
-
-    // Second pass: aggregate, skipping deduplicated entries
-    for (const event of parsedEvents) {
-      const {
-        cost,
-        model,
-        tokens,
-        agentId,
-        timestamp,
-        source,
-        bucketKey,
-        isAnthropic,
-      } = event;
-
-      if (!isAnthropic) {
-        if (timestamp >= todayStart) todayCost += cost;
-        if (timestamp >= weekStart) weekCost += cost;
-        if (timestamp >= monthStart) monthCost += cost;
-      }
-
-      // Deduplication: skip openai-usage-api entries if we already have router data for this model+bucket
-      const dedupKey = `${model}:${bucketKey}`;
-      
-      if (source === 'openai-usage-api' && routerSeen.has(dedupKey)) {
-        dedupSkipped.push({ model, timestamp, cost });
-        console.log(`[Costs] Deduplicated: ${model} at ${new Date(timestamp).toISOString()} ($${cost}) - already in router logs`);
-        continue;
-      }
-
-      if (isAnthropic) {
-        totalAnthropicCost += cost;
-        totalAnthropicTokens += tokens;
-      } else {
-        totalBilledCost += cost;
-      }
-
-      // Source aggregation
-      if (!sourceTotals[source]) {
-        sourceTotals[source] = { cost: 0, billedCost: 0, anthropicCost: 0, tokens: 0, count: 0 };
-      }
-      sourceTotals[source].cost += cost;
-      sourceTotals[source].tokens += tokens;
-      sourceTotals[source].count += 1;
-      if (isAnthropic) {
-        sourceTotals[source].anthropicCost += cost;
-      } else {
-        sourceTotals[source].billedCost += cost;
-      }
-
-      // Provider aggregation
-      const provider = isAnthropic ? 'Anthropic (Max Plan)' : extractProvider(model);
-      if (!providerTotals[provider]) {
-        providerTotals[provider] = { cost: 0, tokens: 0, count: 0, isAnthropic };
-      }
-      providerTotals[provider].cost += cost;
-      providerTotals[provider].tokens += tokens;
-      providerTotals[provider].count += 1;
-
-      // Agent aggregation
-      if (!agentTotals[agentId]) {
-        agentTotals[agentId] = { cost: 0, billedCost: 0, anthropicCost: 0, tokens: 0, count: 0 };
-      }
-      agentTotals[agentId].cost += cost;
-      agentTotals[agentId].tokens += tokens;
-      agentTotals[agentId].count += 1;
-      if (isAnthropic) {
-        agentTotals[agentId].anthropicCost += cost;
-      } else {
-        agentTotals[agentId].billedCost += cost;
-      }
-
-      // Time period bucketing (bucketKey already computed above for deduplication)
-      if (!periodBuckets[bucketKey]) {
-        periodBuckets[bucketKey] = { 
-          timestamp: bucketKey, 
-          billedCost: 0, 
-          anthropicCost: 0,
-          totalCost: 0,
-          count: 0 
-        };
-      }
-      periodBuckets[bucketKey].totalCost += cost;
-      periodBuckets[bucketKey].count += 1;
-      if (isAnthropic) {
-        periodBuckets[bucketKey].anthropicCost += cost;
-      } else {
-        periodBuckets[bucketKey].billedCost += cost;
-      }
-    }
-
-    // Convert to arrays and sort
-    const periodData = Object.entries(periodBuckets)
-      .map(([key, data]) => data)
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, limit);
-
-    const providerBreakdown = Object.entries(providerTotals)
-      .map(([provider, data]) => ({
+    const providerBreakdown = db.prepare(`
+      ${baseCte}
+      SELECT
         provider,
-        ...data,
-      }))
-      .sort((a, b) => b.cost - a.cost);
+        COALESCE(SUM(cost), 0) AS cost,
+        COALESCE(SUM(tokens), 0) AS tokens,
+        COUNT(*) AS count,
+        MAX(is_anthropic) AS isAnthropic
+      FROM deduped
+      GROUP BY provider
+      ORDER BY cost DESC
+    `).all(period, fromTs, toTs);
 
-    const agentBreakdown = Object.entries(agentTotals)
-      .map(([agentId, data]) => ({
-        agentId,
-        ...data,
-      }))
-      .sort((a, b) => b.billedCost - a.billedCost);
+    const agentBreakdown = db.prepare(`
+      ${baseCte}
+      SELECT
+        agent_id AS agentId,
+        COALESCE(SUM(cost), 0) AS cost,
+        COALESCE(SUM(tokens), 0) AS tokens,
+        COUNT(*) AS count,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS anthropicCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS billedCost
+      FROM deduped
+      GROUP BY agent_id
+      ORDER BY billedCost DESC
+    `).all(period, fromTs, toTs);
 
-    const sourceBreakdown = Object.entries(sourceTotals)
-      .map(([source, data]) => ({
+    const sourceBreakdown = db.prepare(`
+      ${baseCte}
+      SELECT
         source,
-        ...data,
-      }))
-      .sort((a, b) => b.cost - a.cost);
+        COALESCE(SUM(cost), 0) AS cost,
+        COALESCE(SUM(tokens), 0) AS tokens,
+        COUNT(*) AS count,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS anthropicCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS billedCost
+      FROM deduped
+      GROUP BY source
+      ORDER BY cost DESC
+    `).all(period, fromTs, toTs);
+
+    const dedupSkipped = db.prepare(`
+      ${baseCte}
+      SELECT model, timestamp, cost
+      FROM normalized n
+      WHERE n.source = 'openai-usage-api'
+        AND EXISTS (
+          SELECT 1 FROM normalized r
+          WHERE r.source = 'openclaw-router'
+            AND r.model = n.model
+            AND r.bucket_key = n.bucket_key
+        )
+      ORDER BY timestamp DESC
+      LIMIT 10
+    `).all(period, fromTs, toTs);
+
+    const dedupSkippedCount = db.prepare(`
+      ${baseCte}
+      SELECT COUNT(*) AS count
+      FROM normalized n
+      WHERE n.source = 'openai-usage-api'
+        AND EXISTS (
+          SELECT 1 FROM normalized r
+          WHERE r.source = 'openclaw-router'
+            AND r.model = n.model
+            AND r.bucket_key = n.bucket_key
+        )
+    `).get(period, fromTs, toTs).count;
 
     res.json({
       summary: {
-        totalBilledCost: parseFloat(totalBilledCost.toFixed(4)),
-        totalAnthropicCost: parseFloat(totalAnthropicCost.toFixed(4)),
-        totalAnthropicTokens,
-        todayBilledCost: parseFloat(todayCost.toFixed(4)),
-        weekBilledCost: parseFloat(weekCost.toFixed(4)),
-        monthBilledCost: parseFloat(monthCost.toFixed(4)),
-        dedupSkipped: dedupSkipped.length,
+        totalBilledCost: parseFloat(summary.totalBilledCost.toFixed(4)),
+        totalAnthropicCost: parseFloat(summary.totalAnthropicCost.toFixed(4)),
+        totalAnthropicTokens: summary.totalAnthropicTokens,
+        todayBilledCost: parseFloat(summary.todayBilledCost.toFixed(4)),
+        weekBilledCost: parseFloat(summary.weekBilledCost.toFixed(4)),
+        monthBilledCost: parseFloat(summary.monthBilledCost.toFixed(4)),
+        dedupSkipped: dedupSkippedCount,
       },
       periodData,
       providerBreakdown,
       agentBreakdown,
       sourceBreakdown,
       deduplication: {
-        skipped: dedupSkipped.length,
-        details: dedupSkipped.slice(0, 10), // First 10 for debugging
+        skipped: dedupSkippedCount,
+        details: dedupSkipped,
       },
     });
   } catch (err) {
@@ -235,47 +222,17 @@ router.get('/', (req, res) => {
 /**
  * Extract provider name from model string
  */
-function extractProvider(model) {
-  const lower = model.toLowerCase();
-  if (lower.includes('gpt') || lower.includes('openai')) return 'OpenAI';
-  if (lower.includes('deepseek')) return 'DeepSeek';
-  if (lower.includes('gemini') || lower.includes('google')) return 'Google';
-  if (lower.includes('llama') || lower.includes('meta')) return 'Meta';
-  if (lower.includes('mistral')) return 'Mistral';
-  if (lower.includes('cohere')) return 'Cohere';
-  if (lower.includes('openrouter')) return 'OpenRouter';
-  return model;
+function normalizeEpochMs(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function isAnthropicModel(model) {
-  const lower = (model || '').toLowerCase();
-  return lower.includes('claude') ||
-    lower.includes('anthropic') ||
-    lower.includes('sonnet') ||
-    lower.includes('opus') ||
-    lower.includes('haiku');
-}
-
-/**
- * Get bucket key for time period
- */
-function getBucketKey(timestamp, period) {
-  const date = new Date(timestamp);
-  switch (period) {
-    case 'hour':
-      return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).getTime();
-    case 'day':
-      return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-    case 'week': {
-      const day = date.getDay();
-      const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
-      return new Date(date.getFullYear(), date.getMonth(), diff).getTime();
-    }
-    case 'month':
-      return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
-    default:
-      return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+function normalizePeriod(value) {
+  const normalized = String(value || '').toLowerCase();
+  if (['hour', 'day', 'week', 'month'].includes(normalized)) {
+    return normalized;
   }
+  return 'day';
 }
 
 export default router;

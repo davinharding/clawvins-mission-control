@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
+import { CostBarChart } from '@/components/CostBarChart';
 import { getCosts, type CostData, type Agent } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -179,6 +180,8 @@ export function CostDashboard({ agents }: Props) {
       </div>
 
       {/* Period Data Table */}
+      <CostBarChart periodData={costData.periodData} period={period} />
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

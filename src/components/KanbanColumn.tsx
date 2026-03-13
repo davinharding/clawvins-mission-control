@@ -6,14 +6,16 @@ type Props = {
   id: string;
   children: React.ReactNode;
   className?: string;
+  dataColumn?: string;
 };
 
-export function KanbanColumn({ id, children, className }: Props) {
+export function KanbanColumn({ id, children, className, dataColumn }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id });
 
   return (
     <div
       ref={setNodeRef}
+      data-column={dataColumn}
       className={cn(
         "flex flex-col min-h-0 overflow-hidden rounded-2xl border border-dashed border-border/70 bg-card/40 p-3 transition-colors",
         className,

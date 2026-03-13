@@ -60,6 +60,8 @@ import { BulkActionBar } from "@/components/BulkActionBar";
 import { CostDashboard } from "@/components/CostDashboard";
 import { EventFeed } from "@/components/EventFeed";
 import { DashboardStats } from "@/components/DashboardStats";
+import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -291,6 +293,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [showStats, setShowStats] = React.useState(false);
+  const [showHelp, setShowHelp] = React.useState(false);
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
   const [showAllTags, setShowAllTags] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
@@ -797,6 +800,32 @@ export default function HomePage() {
       });
     }
   };
+
+  const handleClosePanels = React.useCallback(() => {
+    setShowHelp(false);
+    setShowEventFeed(false);
+    setShowCostDashboard(false);
+    setShowStats(false);
+    setShowMobileFilters(false);
+  }, []);
+
+  const handleJumpToColumn = React.useCallback((index: number) => {
+    const status = columns[index];
+    if (!status) return;
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>(`[data-column=\"${status}\"]`));
+    const target = nodes.find((node) => node.offsetParent !== null) ?? nodes[0];
+    target?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+  }, []);
+
+  useKeyboardShortcuts({
+    onHelp: () => setShowHelp((prev) => !prev),
+    onClosePanels: handleClosePanels,
+    onNewTask: handleAddTask,
+    onToggleStats: () => setShowStats((prev) => !prev),
+    onToggleEvents: () => setShowEventFeed((prev) => !prev),
+    onToggleCosts: () => setShowCostDashboard((prev) => !prev),
+    onJumpToColumn: handleJumpToColumn,
+  });
 
   const handleSaveTask = async (taskId: string, updates: Partial<Task>) => {
     const existing = tasks.find((t) => t.id === taskId);
@@ -1367,6 +1396,14 @@ export default function HomePage() {
                 >
                   {showCostDashboard ? "📋 Tasks" : "💰 Cost"}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowHelp(true)}
+                  className="flex items-center justify-center rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60"
+                  aria-label="Keyboard shortcuts"
+                >
+                  ?
+                </button>
               </div>
               <div className={cn(showStats ? "block" : "hidden")}>
                 <DashboardStats
@@ -1639,6 +1676,7 @@ export default function HomePage() {
                     <KanbanColumn
                       key={column}
                       id={column}
+                      dataColumn={column}
                       className={cn(
                         "min-w-[85vw] snap-start flex-shrink-0 min-h-[50vh]",
                         "lg:min-w-0 lg:flex-shrink lg:min-h-0 lg:overflow-hidden",
@@ -1864,6 +1902,8 @@ export default function HomePage() {
         </div>
 
       </main>
+
+      <KeyboardShortcuts open={showHelp} onClose={() => setShowHelp(false)} />
 
       <TaskEditModal
         open={modalOpen && !!activeTask}

@@ -16,3 +16,20 @@ export function formatRelativeTime(value: number, now = Date.now()) {
     day: "numeric",
   });
 }
+
+export function getDateBucket(timestamp: number) {
+  const date = new Date(timestamp);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+export function getDateLabel(timestamp: number, now = Date.now()) {
+  const todayBucket = getDateBucket(now);
+  const eventBucket = getDateBucket(timestamp);
+
+  if (eventBucket === todayBucket) return "Today";
+  if (eventBucket === getDateBucket(now - 86_400_000)) return "Yesterday";
+
+  return new Date(timestamp)
+    .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+    .replace(",", "");
+}

@@ -5,6 +5,7 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { LinkifiedText } from "@/components/LinkifiedText";
+import { getDateBucket, getDateLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { Agent, EventItem } from "@/lib/api";
 
@@ -138,6 +139,28 @@ export function EventFeed({
     [agentFilteredEvents, selectedType]
   );
 
+  const groupedEvents = React.useMemo(() => {
+    const now = Date.now();
+    const groups: Array<{ key: number; label: string; events: EventItem[] }> = [];
+
+    for (const event of filteredEvents) {
+      const bucket = getDateBucket(event.timestamp);
+      const lastGroup = groups[groups.length - 1];
+
+      if (!lastGroup || lastGroup.key !== bucket) {
+        groups.push({
+          key: bucket,
+          label: getDateLabel(event.timestamp, now),
+          events: [event],
+        });
+      } else {
+        lastGroup.events.push(event);
+      }
+    }
+
+    return groups;
+  }, [filteredEvents]);
+
   const handleRefresh = React.useCallback(() => {
     void onRefresh();
   }, [onRefresh]);
@@ -190,41 +213,55 @@ export function EventFeed({
       <Separator className="flex-shrink-0" />
       <div className="flex-1 overflow-y-auto p-4" data-testid="event-feed">
         <div className="space-y-4">
-          {filteredEvents.map((event, index) => {
-            const agent = event.agentId ? agentById[event.agentId] : null;
-            const isNew = index === 0;
-            const icon = eventIcon[event.type] ?? "⚡";
-            return (
-              <button
-                key={event.id}
-                type="button"
-                data-testid="event-item"
-                onClick={() => onSelectEvent(event)}
-                className={cn(
-                  "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
-                  isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
-                )}
-              >
-                <span className="text-base flex-shrink-0 pt-0.5">{icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold truncate">{agent?.name ?? "System"}</p>
-                    {event.detail?.channelName && event.detail.channelName !== "unknown" && (
-                      <span className="text-[10px] text-muted-foreground font-mono truncate">
-                        {event.detail.channelName}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate">
-                    <LinkifiedText text={event.message} />
-                  </p>
-                </div>
-                <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
-                  {formatTime(event.timestamp)}
+          {groupedEvents.map((group, groupIndex) => (
+            <div key={group.key} className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-muted-foreground/80">
+                  {group.label}
                 </span>
-              </button>
-            );
-          })}
+                <div className="h-px flex-1 bg-border/60" />
+              </div>
+              <div className="space-y-3">
+                {group.events.map((event, index) => {
+                  const agent = event.agentId ? agentById[event.agentId] : null;
+                  const isNew = groupIndex === 0 && index === 0;
+                  const icon = eventIcon[event.type] ?? "⚡";
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      data-testid="event-item"
+                      onClick={() => onSelectEvent(event)}
+                      className={cn(
+                        "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
+                        isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
+                      )}
+                    >
+                      <span className="text-base flex-shrink-0 pt-0.5">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold truncate">
+                            {agent?.name ?? "System"}
+                          </p>
+                          {event.detail?.channelName && event.detail.channelName !== "unknown" && (
+                            <span className="text-[10px] text-muted-foreground font-mono truncate">
+                              {event.detail.channelName}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          <LinkifiedText text={event.message} />
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+                        {formatTime(event.timestamp)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           {!filteredEvents.length && (
             <div className="rounded-xl border border-dashed border-border/70 p-4 text-center text-xs text-muted-foreground">
               No events match these filters.

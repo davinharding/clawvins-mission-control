@@ -1722,6 +1722,9 @@ export default function HomePage() {
                               const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
                               const priority = (task.priority || "low") as TaskPriority;
                               const timestamp = task.updatedAt ?? task.createdAt;
+                              const taskTags = (task.tags ?? []).map((tag) => tag.trim()).filter(Boolean);
+                              const visibleTags = taskTags.slice(0, 3);
+                              const overflowCount = taskTags.length - visibleTags.length;
                               return (
                                 <DraggableCard
                                   key={task.id}
@@ -1805,6 +1808,24 @@ export default function HomePage() {
                                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                           <span>💬</span>
                                           <span>{task.commentCount}</span>
+                                        </div>
+                                      )}
+                                      {taskTags.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                                          {visibleTags.map((tag, index) => (
+                                            <Badge
+                                              key={`${tag}-${index}`}
+                                              variant="outline"
+                                              className="px-1.5 py-0 text-[10px] text-muted-foreground/80 border-muted/40 bg-muted/20"
+                                            >
+                                              {tag}
+                                            </Badge>
+                                          ))}
+                                          {overflowCount > 0 && (
+                                            <span className="px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
+                                              +{overflowCount}
+                                            </span>
+                                          )}
                                         </div>
                                       )}
                                     </CardHeader>

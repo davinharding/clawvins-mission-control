@@ -121,6 +121,15 @@ const columnBg: Record<TaskStatus, string> = {
   archived: "",
 };
 
+const emptyColumnMessages: Record<TaskStatus, string> = {
+  backlog: "No items in backlog",
+  todo: "Nothing queued up",
+  "in-progress": "No active work",
+  testing: "Nothing being tested",
+  done: "No completed tasks",
+  archived: "No archived tasks",
+};
+
 const ARCHIVE_DROP_ID = "archive-panel";
 
 const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
@@ -1737,7 +1746,12 @@ export default function HomePage() {
                         </div>
                         {/* Task list - scrollable */}
                         <div className="flex-1 overflow-y-auto" data-testid="task-list">
-                          <div className="space-y-3">
+                          <div
+                            className={cn(
+                              "space-y-3",
+                              columnTasks.length === 0 && "flex min-h-full flex-col items-center justify-center"
+                            )}
+                          >
                             {columnTasks.map((task) => {
                               const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
                               const priority = (task.priority || "low") as TaskPriority;
@@ -1853,6 +1867,14 @@ export default function HomePage() {
                                 </DraggableCard>
                               );
                             })}
+                            {columnTasks.length === 0 && (
+                              <div className="flex flex-col items-center justify-center gap-2 text-center">
+                                <div className="text-2xl opacity-20">{columnEmojis[column]}</div>
+                                <div className="text-xs text-muted-foreground/50">
+                                  {emptyColumnMessages[column]}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

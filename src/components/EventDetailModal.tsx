@@ -36,6 +36,7 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl"
+        style={{ marginTop: "env(safe-area-inset-top)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

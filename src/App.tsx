@@ -583,6 +583,16 @@ export default function HomePage() {
     [tasks]
   );
 
+  const taskCountByAgent = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const task of tasks) {
+      if (task.status === "done" || task.status === "archived") continue;
+      if (!task.assignedAgent) continue;
+      counts.set(task.assignedAgent, (counts.get(task.assignedAgent) ?? 0) + 1);
+    }
+    return counts;
+  }, [tasks]);
+
   const baseFilteredTasks = React.useMemo(() => {
     // Filter by category (role) — only show tasks assigned to agents in the selected category
     const visibleAgentIds = new Set(visibleAgents.map((a) => a.id));
@@ -1512,12 +1522,22 @@ export default function HomePage() {
                         );
                       })()}
                       <div className="flex-1">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold">{agent.name}</span>
+                          {(() => {
+                            const activeCount = taskCountByAgent.get(agent.id) ?? 0;
+                            if (activeCount <= 0) return null;
+                            return (
+                              <span className="ml-auto rounded-full bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                {activeCount}
+                              </span>
+                            );
+                          })()}
                           <span
                             className={cn(
                               "h-2.5 w-2.5 rounded-full",
-                              statusColor[agent.status]
+                              statusColor[agent.status],
+                              (taskCountByAgent.get(agent.id) ?? 0) > 0 ? "" : "ml-auto"
                             )}
                           />
                         </div>

@@ -304,7 +304,6 @@ export default function HomePage() {
   const [showStats, setShowStats] = React.useState(false);
   const [showHelp, setShowHelp] = React.useState(false);
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
-  const [showAllTags, setShowAllTags] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [showCostDashboard, setShowCostDashboard] = React.useState(false);
   const [taskStats, setTaskStats] = React.useState<TaskStatsResponse | null>(null);
@@ -644,27 +643,6 @@ export default function HomePage() {
   const availableTags = React.useMemo(
     () => tagActivity.map((entry) => entry.tag),
     [tagActivity]
-  );
-
-  const TAGS_COLLAPSE_COUNT = 6;
-
-  const visibleTagActivity = React.useMemo(() => {
-    if (showAllTags) return tagActivity;
-    const topTags = tagActivity.slice(0, TAGS_COLLAPSE_COUNT);
-    if (!selectedTags.length) return topTags;
-    const topKeys = new Set(topTags.map((entry) => entry.tag.toLowerCase()));
-    const selectedKeys = new Set(selectedTags.map((tag) => tag.toLowerCase()));
-    const extraSelected = tagActivity.filter(
-      (entry) => selectedKeys.has(entry.tag.toLowerCase()) && !topKeys.has(entry.tag.toLowerCase())
-    );
-    return [...topTags, ...extraSelected];
-  }, [showAllTags, tagActivity, selectedTags]);
-
-  const hasMoreTags = tagActivity.length > TAGS_COLLAPSE_COUNT;
-
-  const activeTagSet = React.useMemo(
-    () => new Set(selectedTags.map((tag) => tag.toLowerCase())),
-    [selectedTags]
   );
 
   const filteredTasks = React.useMemo(() => {
@@ -1284,52 +1262,16 @@ export default function HomePage() {
 
           {showMobileFilters && (
             <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-1.5 space-y-1">
-              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <span>Tags</span>
-                {selectedTags.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleClearTaskFilters}
-                    className="text-primary"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {tagActivity.length === 0 && (
-                  <span className="text-[11px] text-muted-foreground">No tags yet</span>
-                )}
-                {visibleTagActivity.map((entry) => {
-                  const tag = entry.tag;
-                  const isActive = activeTagSet.has(tag.toLowerCase());
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => handleToggleTag(tag)}
-                      aria-pressed={isActive}
-                      className="flex-shrink-0"
-                    >
-                      <Badge
-                        variant={isActive ? "default" : "outline"}
-                        className={cn("cursor-pointer text-[11px] py-0.5", !isActive && "hover:bg-muted/60")}
-                      >
-                        {tag}
-                      </Badge>
-                    </button>
-                  );
-                })}
-              </div>
-              {hasMoreTags && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllTags((prev) => !prev)}
-                  className="text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
-                >
-                  {showAllTags ? "Show fewer tags" : "Show more tags"}
-                </button>
-              )}
+              <TaskSearchBar
+                query={searchQuery}
+                onQueryChange={handleSearchQueryChange}
+                tags={availableTags}
+                selectedTags={selectedTags}
+                onToggleTag={handleToggleTag}
+                onClear={handleClearTaskFilters}
+                filteredCount={filteredTasks.length}
+                totalCount={baseFilteredTasks.length}
+              />
             </div>
           )}
 

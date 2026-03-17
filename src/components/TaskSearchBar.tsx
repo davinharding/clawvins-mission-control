@@ -11,10 +11,29 @@ export type TaskSearchBarProps = {
   tags: string[];
   selectedTags: string[];
   onToggleTag: (tag: string) => void;
+  selectedPriorities: Array<"low" | "medium" | "high" | "critical">;
+  onTogglePriority: (priority: "low" | "medium" | "high" | "critical") => void;
   onClear: () => void;
   filteredCount: number;
   totalCount: number;
 };
+
+const priorityVariant: Record<
+  "low" | "medium" | "high" | "critical",
+  Parameters<typeof Badge>[0]["variant"]
+> = {
+  low: "outline",
+  medium: "default",
+  high: "warning",
+  critical: "danger"
+};
+
+const priorityOrder: Array<"critical" | "high" | "medium" | "low"> = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+];
 
 export function TaskSearchBar({
   query,
@@ -22,6 +41,8 @@ export function TaskSearchBar({
   tags,
   selectedTags,
   onToggleTag,
+  selectedPriorities,
+  onTogglePriority,
   onClear,
   filteredCount,
   totalCount,
@@ -48,7 +69,13 @@ export function TaskSearchBar({
     [selectedTags]
   );
 
-  const hasFilters = Boolean(query.trim()) || selectedTags.length > 0;
+  const activePriorities = React.useMemo(
+    () => new Set(selectedPriorities),
+    [selectedPriorities]
+  );
+
+  const hasFilters =
+    Boolean(query.trim()) || selectedTags.length > 0 || selectedPriorities.length > 0;
 
   const handleClear = () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -70,35 +97,64 @@ export function TaskSearchBar({
       </div>
 
       <div className="flex-1">
-        <div
-          className={cn(
-            "flex gap-2",
-            "flex-wrap sm:flex-nowrap",
-            "sm:overflow-x-auto sm:scrollbar-hide"
-          )}
-        >
-          {tags.length === 0 && (
-            <span className="text-xs text-muted-foreground">No tags yet</span>
-          )}
-          {tags.map((tag) => {
-            const isActive = activeTags.has(tag.toLowerCase());
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => onToggleTag(tag)}
-                aria-pressed={isActive}
-                className="flex-shrink-0"
-              >
-                <Badge
-                  variant={isActive ? "default" : "outline"}
-                  className={cn("cursor-pointer", !isActive && "hover:bg-muted/60")}
+        <div className="flex flex-col gap-2">
+          <div
+            className={cn(
+              "flex gap-2",
+              "flex-wrap sm:flex-nowrap",
+              "sm:overflow-x-auto sm:scrollbar-hide"
+            )}
+          >
+            {priorityOrder.map((priority) => {
+              const isActive = activePriorities.has(priority);
+              return (
+                <button
+                  key={priority}
+                  type="button"
+                  onClick={() => onTogglePriority(priority)}
+                  aria-pressed={isActive}
+                  className="flex-shrink-0"
                 >
-                  {tag}
-                </Badge>
-              </button>
-            );
-          })}
+                  <Badge
+                    variant={isActive ? priorityVariant[priority] : "outline"}
+                    className={cn("cursor-pointer", !isActive && "hover:bg-muted/60")}
+                  >
+                    {priority}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
+          <div
+            className={cn(
+              "flex gap-2",
+              "flex-wrap sm:flex-nowrap",
+              "sm:overflow-x-auto sm:scrollbar-hide"
+            )}
+          >
+            {tags.length === 0 && (
+              <span className="text-xs text-muted-foreground">No tags yet</span>
+            )}
+            {tags.map((tag) => {
+              const isActive = activeTags.has(tag.toLowerCase());
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => onToggleTag(tag)}
+                  aria-pressed={isActive}
+                  className="flex-shrink-0"
+                >
+                  <Badge
+                    variant={isActive ? "default" : "outline"}
+                    className={cn("cursor-pointer", !isActive && "hover:bg-muted/60")}
+                  >
+                    {tag}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/time";
+import { stripMarkdown } from "@/lib/markdown";
 import type {
   Agent,
   AgentRole,
@@ -1741,7 +1742,7 @@ export default function HomePage() {
                                       </div>
                                       {task.description && (
                                         <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                                          {task.description}
+                                          {stripMarkdown(task.description)}
                                         </p>
                                       )}
                                       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -1827,7 +1828,7 @@ export default function HomePage() {
                         </div>
                         {task.description && (
                           <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                            {task.description}
+                            {stripMarkdown(task.description)}
                           </p>
                         )}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">

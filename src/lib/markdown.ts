@@ -114,3 +114,19 @@ export const renderMarkdown = (text: string) => {
 
   return output;
 };
+
+export const stripMarkdown = (input: string) => {
+  let text = input ?? "";
+
+  text = text.replace(/```[\s\S]*?```/g, " ");
+  text = text.replace(/^\s*#{1,6}\s+/gm, "");
+  text = text.replace(/^\s*>\s?/gm, "");
+  text = text.replace(/^\s*-\s+/gm, "");
+  text = text.replace(/^\s*-{3,}\s*$/gm, " ");
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  text = text.replace(/\*\*(.+?)\*\*/g, "$1");
+  text = text.replace(/\*(.+?)\*/g, "$1");
+  text = text.replace(/`([^`]+?)`/g, "$1");
+
+  return text.replace(/\s+/g, " ").trim();
+};

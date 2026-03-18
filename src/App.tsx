@@ -1669,7 +1669,7 @@ export default function HomePage() {
                   onDragEnd={handleDragEnd}
                   onDragCancel={() => setDraggingTaskId(null)}
                 >
-              {showZeroTaskEmptyState ? (
+                  {showZeroTaskEmptyState ? (
                 <div className="flex flex-1 items-center justify-center py-8">
                   <Card className="w-full max-w-md border-border/60 bg-card/80">
                     <CardHeader className="items-center text-center space-y-3 p-6">
@@ -1682,7 +1682,7 @@ export default function HomePage() {
                     </CardHeader>
                   </Card>
                 </div>
-              ) : showFilterEmptyState ? (
+                                ) : showFilterEmptyState ? (
                 <div className="flex flex-1 items-center justify-center py-8">
                   <Card className="w-full max-w-md border-border/60 bg-card/80">
                     <CardHeader className="items-center text-center space-y-3 p-6">
@@ -1694,9 +1694,9 @@ export default function HomePage() {
                     </CardHeader>
                   </Card>
                 </div>
-              ) : (
+                                ) : (
               <>
-              {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
+                <>
               <div
                 className="flex flex-col gap-2 lg:hidden"
                 style={{ scrollSnapType: "y mandatory", overflowY: "auto" }}
@@ -2024,9 +2024,10 @@ export default function HomePage() {
 
               {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
               {isSelecting && <div className="h-20 flex-shrink-0" />}
-              </>
-              )}
+                    </>
+                  )}
                 </DndContext>
+              </>
             )}
           </section>
 

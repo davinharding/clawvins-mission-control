@@ -782,7 +782,7 @@ export default function HomePage() {
     setError(null);
 
     try {
-      const assignedAgent = agents[0]?.id ?? null;
+      const assignedAgent = selectedAgentId ?? agents[0]?.id ?? null;
       const response = await createTask({
         title: "New orchestration request",
         status: "todo",

@@ -132,6 +132,7 @@ const emptyColumnMessages: Record<TaskStatus, string> = {
 };
 
 const ARCHIVE_DROP_ID = "archive-panel";
+const COLUMN_SORTS_KEY = "mc_column_sorts";
 
 const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
   low: "outline",
@@ -147,6 +148,24 @@ type ColumnSort =
   | "created-asc"
   | "updated-desc"
   | "updated-asc";
+
+const validColumnSorts: ReadonlySet<ColumnSort> = new Set<ColumnSort>([
+  "priority-desc",
+  "priority-asc",
+  "created-desc",
+  "created-asc",
+  "updated-desc",
+  "updated-asc",
+]);
+
+const defaultColumnSorts: Record<TaskStatus, ColumnSort> = {
+  backlog: "priority-desc",
+  todo: "priority-desc",
+  "in-progress": "priority-desc",
+  testing: "priority-desc",
+  done: "priority-desc",
+  archived: "priority-desc",
+};
 
 const columnSortOptions: Array<{ label: string; value: ColumnSort }> = [
   { label: "Priority (High → Low)", value: "priority-desc" },
@@ -319,13 +338,34 @@ export default function HomePage() {
   const [modalOpen, setModalOpen] = React.useState(false);
   const [incomingComment, setIncomingComment] = React.useState<Comment | null>(null);
   const [connectionState, setConnectionState] = React.useState<ConnectionState>("disconnected");
-  const [columnSorts, setColumnSorts] = React.useState<Record<TaskStatus, ColumnSort>>({
-    backlog: "priority-desc",
-    todo: "priority-desc",
-    "in-progress": "priority-desc",
-    testing: "priority-desc",
-    done: "priority-desc",
-    archived: "priority-desc",
+  const [columnSorts, setColumnSorts] = React.useState<Record<TaskStatus, ColumnSort>>(() => {
+    try {
+      if (typeof window === "undefined") {
+        return defaultColumnSorts;
+      }
+
+      const raw = window.localStorage.getItem(COLUMN_SORTS_KEY);
+      if (!raw) {
+        return defaultColumnSorts;
+      }
+
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return defaultColumnSorts;
+      }
+
+      const parsedRecord = parsed as Partial<Record<TaskStatus, unknown>>;
+      for (const status of Object.keys(defaultColumnSorts) as TaskStatus[]) {
+        const value = parsedRecord[status];
+        if (typeof value !== "string" || !validColumnSorts.has(value as ColumnSort)) {
+          return defaultColumnSorts;
+        }
+      }
+
+      return parsedRecord as Record<TaskStatus, ColumnSort>;
+    } catch {
+      return defaultColumnSorts;
+    }
   });
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
@@ -375,6 +415,17 @@ export default function HomePage() {
   React.useEffect(() => {
     activeTaskIdRef.current = activeTaskId;
   }, [activeTaskId]);
+
+  React.useEffect(() => {
+    try {
+      if (typeof window === "undefined") {
+        return;
+      }
+      window.localStorage.setItem(COLUMN_SORTS_KEY, JSON.stringify(columnSorts));
+    } catch {
+      // Ignore localStorage write failures (quota/private mode)
+    }
+  }, [columnSorts]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -661,6 +712,9 @@ export default function HomePage() {
 
     return next;
   }, [baseFilteredTasks, searchQuery, selectedTags, selectedPriorities]);
+
+  const showZeroTaskEmptyState = boardTasks.length === 0;
+  const showFilterEmptyState = filteredTasks.length === 0 && baseFilteredTasks.length > 0;
 
   const activityStats = React.useMemo(() => {
     const activeAgents = agents.filter((agent) => agent.status !== "offline").length;
@@ -1562,11 +1616,37 @@ export default function HomePage() {
                   onDragEnd={handleDragEnd}
                   onDragCancel={() => setDraggingTaskId(null)}
                 >
-              {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
-              <div
-                className="flex flex-col gap-2 lg:hidden"
-                style={{ scrollSnapType: "y mandatory", overflowY: "auto" }}
-              >
+                  {showZeroTaskEmptyState ? (
+                <div className="flex flex-1 items-center justify-center py-8">
+                  <Card className="w-full max-w-md border-border/60 bg-card/80">
+                    <CardHeader className="items-center text-center space-y-3 p-6">
+                      <h2 className="text-xl font-semibold">Mission Control is ready</h2>
+                      <p className="text-sm text-muted-foreground">Create your first task to get started</p>
+                      <Button type="button" variant="default" onClick={handleAddTask} disabled={loading}>
+                        + New Task
+                      </Button>
+                      <p className="text-xs text-muted-foreground">Press N to create a task</p>
+                    </CardHeader>
+                  </Card>
+                </div>
+                  ) : showFilterEmptyState ? (
+                <div className="flex flex-1 items-center justify-center py-8">
+                  <Card className="w-full max-w-md border-border/60 bg-card/80">
+                    <CardHeader className="items-center text-center space-y-3 p-6">
+                      <h2 className="text-xl font-semibold">No tasks match your filters</h2>
+                      <p className="text-sm text-muted-foreground">Try adjusting search or selected tags.</p>
+                      <Button type="button" variant="default" onClick={handleClearTaskFilters}>
+                        Clear Filters
+                      </Button>
+                    </CardHeader>
+                  </Card>
+                </div>
+                  ) : (
+                    <>
+                      <div
+                        className="flex flex-col gap-2 lg:hidden"
+                        style={{ scrollSnapType: "y mandatory", overflowY: "auto" }}
+                      >
                 {columns.map((status) => {
                   const rowTasks = filteredTasks.filter((t) => t.status === status);
                   return (
@@ -1828,10 +1908,10 @@ export default function HomePage() {
                     </KanbanColumn>
                   );
                 })}
-              </div>{/* end desktop board */}
+                      </div>{/* end desktop board */}
 
-              {/* Ghost card while dragging */}
-              <DragOverlay>
+                      {/* Ghost card while dragging */}
+                      <DragOverlay>
                 {draggingTaskId ? (() => {
                   const task = tasks.find((t) => t.id === draggingTaskId);
                   const agent = task?.assignedAgent ? agentById[task.assignedAgent] : null;
@@ -1872,10 +1952,10 @@ export default function HomePage() {
                     </Card>
                   );
                 })() : null}
-              </DragOverlay>
+                      </DragOverlay>
 
-              {/* Archive Panel - inside DndContext so it can receive drops */}
-              <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
+                      {/* Archive Panel - inside DndContext so it can receive drops */}
+                      <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
                 <ArchivePanel
                   tasks={archivedTasks}
                   agentById={agentById}
@@ -1886,11 +1966,13 @@ export default function HomePage() {
                   }}
                   isLoading={loading}
                 />
-              </div>
+                      </div>
 
-              {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
-              {isSelecting && <div className="h-20 flex-shrink-0" />}
-              </DndContext>
+                      {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
+                      {isSelecting && <div className="h-20 flex-shrink-0" />}
+                    </>
+                  )}
+                </DndContext>
               </>
             )}
           </section>

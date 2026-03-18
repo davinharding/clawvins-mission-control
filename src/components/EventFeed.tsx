@@ -42,6 +42,7 @@ type EventFeedProps = {
   onLoadMore: () => Promise<void>;
   hasMore: boolean;
   isLoadingMore: boolean;
+  onClose?: () => void;
 };
 
 export type FilterType = "all" | "tasks" | "messages" | "tools" | "system";
@@ -84,6 +85,7 @@ export function EventFeed({
   onLoadMore,
   hasMore,
   isLoadingMore,
+  onClose,
 }: EventFeedProps) {
   const [selectedType, setSelectedType] = React.useState<FilterType>("all");
   const [selectedAgent, setSelectedAgent] = React.useState("all");
@@ -187,6 +189,16 @@ export function EventFeed({
             >
               ↻
             </Button>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-border/70 text-muted-foreground transition hover:bg-muted/60"
+                aria-label="Close event feed"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
       </div>

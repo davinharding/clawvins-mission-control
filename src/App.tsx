@@ -740,6 +740,9 @@ export default function HomePage() {
     return next;
   }, [baseFilteredTasks, searchQuery, selectedTags]);
 
+  const showZeroTaskEmptyState = boardTasks.length === 0;
+  const showFilterEmptyState = filteredTasks.length === 0 && baseFilteredTasks.length > 0;
+
   const activityStats = React.useMemo(() => {
     const activeAgents = agents.filter((agent) => agent.status !== "offline").length;
     const completedToday = taskStats?.dailyCompletions?.length
@@ -1666,6 +1669,33 @@ export default function HomePage() {
                   onDragEnd={handleDragEnd}
                   onDragCancel={() => setDraggingTaskId(null)}
                 >
+              {showZeroTaskEmptyState ? (
+                <div className="flex flex-1 items-center justify-center py-8">
+                  <Card className="w-full max-w-md border-border/60 bg-card/80">
+                    <CardHeader className="items-center text-center space-y-3 p-6">
+                      <h2 className="text-xl font-semibold">Mission Control is ready</h2>
+                      <p className="text-sm text-muted-foreground">Create your first task to get started</p>
+                      <Button type="button" variant="default" onClick={handleAddTask} disabled={loading}>
+                        + New Task
+                      </Button>
+                      <p className="text-xs text-muted-foreground">Press N to create a task</p>
+                    </CardHeader>
+                  </Card>
+                </div>
+              ) : showFilterEmptyState ? (
+                <div className="flex flex-1 items-center justify-center py-8">
+                  <Card className="w-full max-w-md border-border/60 bg-card/80">
+                    <CardHeader className="items-center text-center space-y-3 p-6">
+                      <h2 className="text-xl font-semibold">No tasks match your filters</h2>
+                      <p className="text-sm text-muted-foreground">Try adjusting search or selected tags.</p>
+                      <Button type="button" variant="default" onClick={handleClearTaskFilters}>
+                        Clear Filters
+                      </Button>
+                    </CardHeader>
+                  </Card>
+                </div>
+              ) : (
+              <>
               {/* Mobile board: compressed rows — all 5 statuses visible on one screen */}
               <div
                 className="flex flex-col gap-2 lg:hidden"
@@ -1994,8 +2024,9 @@ export default function HomePage() {
 
               {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
               {isSelecting && <div className="h-20 flex-shrink-0" />}
-              </DndContext>
               </>
+              )}
+                </DndContext>
             )}
           </section>
 

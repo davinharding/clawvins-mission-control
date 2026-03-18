@@ -131,6 +131,7 @@ const emptyColumnMessages: Record<TaskStatus, string> = {
 };
 
 const ARCHIVE_DROP_ID = "archive-panel";
+const COLUMN_SORTS_KEY = "mc_column_sorts";
 
 const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
   low: "outline",
@@ -146,6 +147,24 @@ type ColumnSort =
   | "created-asc"
   | "updated-desc"
   | "updated-asc";
+
+const validColumnSorts: ReadonlySet<ColumnSort> = new Set<ColumnSort>([
+  "priority-desc",
+  "priority-asc",
+  "created-desc",
+  "created-asc",
+  "updated-desc",
+  "updated-asc",
+]);
+
+const defaultColumnSorts: Record<TaskStatus, ColumnSort> = {
+  backlog: "priority-desc",
+  todo: "priority-desc",
+  "in-progress": "priority-desc",
+  testing: "priority-desc",
+  done: "priority-desc",
+  archived: "priority-desc",
+};
 
 const columnSortOptions: Array<{ label: string; value: ColumnSort }> = [
   { label: "Priority (High → Low)", value: "priority-desc" },
@@ -320,13 +339,34 @@ export default function HomePage() {
   const [modalOpen, setModalOpen] = React.useState(false);
   const [incomingComment, setIncomingComment] = React.useState<Comment | null>(null);
   const [connectionState, setConnectionState] = React.useState<ConnectionState>("disconnected");
-  const [columnSorts, setColumnSorts] = React.useState<Record<TaskStatus, ColumnSort>>({
-    backlog: "priority-desc",
-    todo: "priority-desc",
-    "in-progress": "priority-desc",
-    testing: "priority-desc",
-    done: "priority-desc",
-    archived: "priority-desc",
+  const [columnSorts, setColumnSorts] = React.useState<Record<TaskStatus, ColumnSort>>(() => {
+    try {
+      if (typeof window === "undefined") {
+        return defaultColumnSorts;
+      }
+
+      const raw = window.localStorage.getItem(COLUMN_SORTS_KEY);
+      if (!raw) {
+        return defaultColumnSorts;
+      }
+
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return defaultColumnSorts;
+      }
+
+      const parsedRecord = parsed as Partial<Record<TaskStatus, unknown>>;
+      for (const status of Object.keys(defaultColumnSorts) as TaskStatus[]) {
+        const value = parsedRecord[status];
+        if (typeof value !== "string" || !validColumnSorts.has(value as ColumnSort)) {
+          return defaultColumnSorts;
+        }
+      }
+
+      return parsedRecord as Record<TaskStatus, ColumnSort>;
+    } catch {
+      return defaultColumnSorts;
+    }
   });
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
@@ -376,6 +416,17 @@ export default function HomePage() {
   React.useEffect(() => {
     activeTaskIdRef.current = activeTaskId;
   }, [activeTaskId]);
+
+  React.useEffect(() => {
+    try {
+      if (typeof window === "undefined") {
+        return;
+      }
+      window.localStorage.setItem(COLUMN_SORTS_KEY, JSON.stringify(columnSorts));
+    } catch {
+      // Ignore localStorage write failures (quota/private mode)
+    }
+  }, [columnSorts]);
 
   React.useEffect(() => {
     let mounted = true;

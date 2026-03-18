@@ -1455,7 +1455,7 @@ export default function HomePage() {
               type="button"
               onClick={() => setShowEventFeed(false)}
               className="absolute right-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg border border-border/70 text-muted-foreground hover:bg-muted/60 transition"
-              style={{ top: "12px" }}
+              style={{ top: "calc(12px + env(safe-area-inset-top))" }}
               aria-label="Close event feed"
             >
               ✕

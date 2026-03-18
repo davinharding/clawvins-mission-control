@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/time";
+import { stripMarkdown } from "@/lib/markdown";
 import type {
   Agent,
   AgentRole,
@@ -228,7 +229,6 @@ const upsertById = <T extends { id: string }>(items: T[], item: T, prepend = fal
 };
 
 const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
-  console.log('[mergeEvents] Input items:', items.length, 'incoming:', incoming.length);
   const merged = new Map<string, EventItem>();
   items.forEach((event) => merged.set(event.id, event));
   incoming.forEach((event) => merged.set(event.id, event));
@@ -239,7 +239,6 @@ const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
     result.push(event);
   }
   result.sort((a, b) => b.timestamp - a.timestamp);
-  console.log('[mergeEvents] Output:', result.length, 'events');
   return result;
 };
 
@@ -305,7 +304,6 @@ export default function HomePage() {
   const [showStats, setShowStats] = React.useState(false);
   const [showHelp, setShowHelp] = React.useState(false);
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
-  const [showAllTags, setShowAllTags] = React.useState(false);
   const [showEventFeed, setShowEventFeed] = React.useState(false);
   const [showCostDashboard, setShowCostDashboard] = React.useState(false);
   const [taskStats, setTaskStats] = React.useState<TaskStatsResponse | null>(null);
@@ -451,11 +449,9 @@ export default function HomePage() {
     const unsubscribe = onConnectionStateChange(setConnectionState);
 
     socket.on("connect", () => {
-      console.log('[WebSocket] Connected');
     });
 
     socket.on("task.created", (payload: TaskPayload) => {
-      console.log('[WebSocket] Task created:', payload.task.id);
       setTasks((prev) => upsertById(prev, payload.task, true));
       refreshTaskStats();
       addNotification({
@@ -467,7 +463,6 @@ export default function HomePage() {
     });
 
     socket.on("task.updated", (payload: TaskPayload) => {
-      console.log('[WebSocket] Task updated:', payload.task.id);
       if (payload.task.status === "archived") {
         // Move from board to archive
         setTasks((prev) => prev.filter((t) => t.id !== payload.task.id));
@@ -504,7 +499,6 @@ export default function HomePage() {
     });
 
     socket.on("task.deleted", (payload: TaskDeletedPayload) => {
-      console.log('[WebSocket] Task deleted:', payload.taskId);
       setTasks((prev) => prev.filter((task) => task.id !== payload.taskId));
       refreshTaskStats();
       const currentTaskId = activeTaskIdRef.current;
@@ -520,23 +514,17 @@ export default function HomePage() {
     });
 
     socket.on("agent.status_changed", (payload: AgentPayload) => {
-      console.log('[WebSocket] Agent status changed:', payload.agent.id, payload.agent.status);
       setAgents((prev) => upsertById(prev, payload.agent));
     });
 
     socket.on("event.new", (payload: EventPayload) => {
-      console.log('[WebSocket] Received event.new:', payload);
-      console.log('[WebSocket] Current event count before merge:', events.length);
       setEvents((prev) => {
-        console.log('[State] Prev events in setter:', prev.length);
         const updated = mergeEvents(prev, [payload.event]);
-        console.log('[State] Updated events count:', updated.length);
         return updated;
       });
     });
 
     socket.on("comment.created", (payload: CommentPayload) => {
-      console.log('[WebSocket] Comment created:', payload.comment.id);
       setTasks((prev) =>
         prev.map((task) =>
           task.id === payload.comment.taskId
@@ -554,7 +542,6 @@ export default function HomePage() {
     });
 
     socket.on("tasks.auto_archived", (payload: { count: number }) => {
-      console.log('[WebSocket] Auto-archived:', payload.count, 'tasks');
       // Refresh both board tasks and archive
       Promise.all([getTasks(), getArchivedTasks()]).then(([tasksRes, archiveRes]) => {
         setTasks(tasksRes.tasks);
@@ -645,27 +632,6 @@ export default function HomePage() {
   const availableTags = React.useMemo(
     () => tagActivity.map((entry) => entry.tag),
     [tagActivity]
-  );
-
-  const TAGS_COLLAPSE_COUNT = 6;
-
-  const visibleTagActivity = React.useMemo(() => {
-    if (showAllTags) return tagActivity;
-    const topTags = tagActivity.slice(0, TAGS_COLLAPSE_COUNT);
-    if (!selectedTags.length) return topTags;
-    const topKeys = new Set(topTags.map((entry) => entry.tag.toLowerCase()));
-    const selectedKeys = new Set(selectedTags.map((tag) => tag.toLowerCase()));
-    const extraSelected = tagActivity.filter(
-      (entry) => selectedKeys.has(entry.tag.toLowerCase()) && !topKeys.has(entry.tag.toLowerCase())
-    );
-    return [...topTags, ...extraSelected];
-  }, [showAllTags, tagActivity, selectedTags]);
-
-  const hasMoreTags = tagActivity.length > TAGS_COLLAPSE_COUNT;
-
-  const activeTagSet = React.useMemo(
-    () => new Set(selectedTags.map((tag) => tag.toLowerCase())),
-    [selectedTags]
   );
 
   const filteredTasks = React.useMemo(() => {
@@ -1046,12 +1012,9 @@ export default function HomePage() {
 
   const handleRefreshEvents = React.useCallback(async () => {
     try {
-      console.log("[Refresh] Fetching events...");
       const eventsResponse = await getEvents({ limit: EVENTS_PAGE_LIMIT });
-      console.log("[Refresh] Received:", eventsResponse.events.length, "events");
       setEvents([...eventsResponse.events]);
       setEventsHasMore(eventsResponse.events.length >= EVENTS_PAGE_LIMIT);
-      console.log("[Refresh] State updated");
     } catch (err) {
       console.error("[Refresh] Error:", err);
     }
@@ -1301,52 +1264,18 @@ export default function HomePage() {
 
           {showMobileFilters && (
             <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-1.5 space-y-1">
-              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <span>Tags</span>
-                {selectedTags.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleClearTaskFilters}
-                    className="text-primary"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {tagActivity.length === 0 && (
-                  <span className="text-[11px] text-muted-foreground">No tags yet</span>
-                )}
-                {visibleTagActivity.map((entry) => {
-                  const tag = entry.tag;
-                  const isActive = activeTagSet.has(tag.toLowerCase());
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => handleToggleTag(tag)}
-                      aria-pressed={isActive}
-                      className="flex-shrink-0"
-                    >
-                      <Badge
-                        variant={isActive ? "default" : "outline"}
-                        className={cn("cursor-pointer text-[11px] py-0.5", !isActive && "hover:bg-muted/60")}
-                      >
-                        {tag}
-                      </Badge>
-                    </button>
-                  );
-                })}
-              </div>
-              {hasMoreTags && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllTags((prev) => !prev)}
-                  className="text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
-                >
-                  {showAllTags ? "Show fewer tags" : "Show more tags"}
-                </button>
-              )}
+              <TaskSearchBar
+                query={searchQuery}
+                onQueryChange={handleSearchQueryChange}
+                tags={availableTags}
+                selectedTags={selectedTags}
+                onToggleTag={handleToggleTag}
+                selectedPriorities={selectedPriorities}
+                onTogglePriority={handleTogglePriority}
+                onClear={handleClearTaskFilters}
+                filteredCount={filteredTasks.length}
+                totalCount={baseFilteredTasks.length}
+              />
             </div>
           )}
 
@@ -1834,7 +1763,7 @@ export default function HomePage() {
                                       </div>
                                       {task.description && (
                                         <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                                          {task.description}
+                                          {stripMarkdown(task.description)}
                                         </p>
                                       )}
                                       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -1920,7 +1849,7 @@ export default function HomePage() {
                         </div>
                         {task.description && (
                           <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                            {task.description}
+                            {stripMarkdown(task.description)}
                           </p>
                         )}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">

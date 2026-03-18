@@ -34,6 +34,10 @@ export function KeyboardShortcuts({ open, onClose }: KeyboardShortcutsProps) {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
+      style={{
+        paddingTop: "max(16px, env(safe-area-inset-top))",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+      }}
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
@@ -43,7 +47,10 @@ export function KeyboardShortcuts({ open, onClose }: KeyboardShortcutsProps) {
         aria-modal="true"
         aria-label="Keyboard shortcuts"
       >
-        <div className="flex items-center justify-between">
+        <div
+          className="flex items-center justify-between"
+          style={{ paddingTop: "calc(1rem + env(safe-area-inset-top))" }}
+        >
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               Keyboard shortcuts

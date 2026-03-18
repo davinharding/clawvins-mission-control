@@ -40,7 +40,10 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border/60 px-6 py-4">
+        <div
+          className="flex items-center justify-between border-b border-border/60 px-6 py-4"
+          style={{ paddingTop: "calc(1rem + env(safe-area-inset-top))" }}
+        >
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {event.type.replace(/_/g, " ")}

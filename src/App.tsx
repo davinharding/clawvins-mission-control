@@ -1682,7 +1682,7 @@ export default function HomePage() {
                     </CardHeader>
                   </Card>
                 </div>
-                                ) : showFilterEmptyState ? (
+                  ) : showFilterEmptyState ? (
                 <div className="flex flex-1 items-center justify-center py-8">
                   <Card className="w-full max-w-md border-border/60 bg-card/80">
                     <CardHeader className="items-center text-center space-y-3 p-6">
@@ -1694,13 +1694,12 @@ export default function HomePage() {
                     </CardHeader>
                   </Card>
                 </div>
-                                ) : (
-              <>
-                <>
-              <div
-                className="flex flex-col gap-2 lg:hidden"
-                style={{ scrollSnapType: "y mandatory", overflowY: "auto" }}
-              >
+                  ) : (
+                    <>
+                      <div
+                        className="flex flex-col gap-2 lg:hidden"
+                        style={{ scrollSnapType: "y mandatory", overflowY: "auto" }}
+                      >
                 {columns.map((status) => {
                   const rowTasks = filteredTasks.filter((t) => t.status === status);
                   return (
@@ -1962,10 +1961,10 @@ export default function HomePage() {
                     </KanbanColumn>
                   );
                 })}
-              </div>{/* end desktop board */}
+                      </div>{/* end desktop board */}
 
-              {/* Ghost card while dragging */}
-              <DragOverlay>
+                      {/* Ghost card while dragging */}
+                      <DragOverlay>
                 {draggingTaskId ? (() => {
                   const task = tasks.find((t) => t.id === draggingTaskId);
                   const agent = task?.assignedAgent ? agentById[task.assignedAgent] : null;
@@ -2006,10 +2005,10 @@ export default function HomePage() {
                     </Card>
                   );
                 })() : null}
-              </DragOverlay>
+                      </DragOverlay>
 
-              {/* Archive Panel - inside DndContext so it can receive drops */}
-              <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
+                      {/* Archive Panel - inside DndContext so it can receive drops */}
+                      <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
                 <ArchivePanel
                   tasks={archivedTasks}
                   agentById={agentById}
@@ -2020,10 +2019,10 @@ export default function HomePage() {
                   }}
                   isLoading={loading}
                 />
-              </div>
+                      </div>
 
-              {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
-              {isSelecting && <div className="h-20 flex-shrink-0" />}
+                      {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
+                      {isSelecting && <div className="h-20 flex-shrink-0" />}
                     </>
                   )}
                 </DndContext>

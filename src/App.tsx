@@ -645,11 +645,10 @@ export default function HomePage() {
     }
 
     if (selectedTags.length) {
-      const selected = selectedTags.map((tag) => tag.toLowerCase());
+      const selected = new Set(selectedTags.map((tag) => tag.toLowerCase()));
       next = next.filter((task) => {
         if (!task.tags?.length) return false;
-        const tagSet = new Set(task.tags.map((tag) => tag.toLowerCase()));
-        return selected.every((tag) => tagSet.has(tag));
+        return task.tags.some((tag) => selected.has(tag.toLowerCase()));
       });
     }
 

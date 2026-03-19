@@ -89,6 +89,8 @@ export function EventFeed({
 }: EventFeedProps) {
   const [selectedType, setSelectedType] = React.useState<FilterType>("all");
   const [selectedAgent, setSelectedAgent] = React.useState("all");
+  const [focusedIndex, setFocusedIndex] = React.useState(-1);
+  const listRef = React.useRef<HTMLDivElement>(null);
 
   const agentOptions = React.useMemo(() => {
     const agents = Object.values(agentById).sort((a, b) => a.name.localeCompare(b.name));
@@ -163,6 +165,57 @@ export function EventFeed({
     return groups;
   }, [filteredEvents]);
 
+  const flatEvents = React.useMemo(
+    () => groupedEvents.flatMap((group) => group.events),
+    [groupedEvents]
+  );
+
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!flatEvents.length) return;
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setFocusedIndex((prev) => Math.min(prev + 1, flatEvents.length - 1));
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setFocusedIndex((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+
+      if (event.key === "Home") {
+        event.preventDefault();
+        setFocusedIndex(0);
+        return;
+      }
+
+      if (event.key === "End") {
+        event.preventDefault();
+        setFocusedIndex(flatEvents.length - 1);
+        return;
+      }
+
+      if (event.key === "Enter" && focusedIndex >= 0 && focusedIndex < flatEvents.length) {
+        event.preventDefault();
+        onSelectEvent(flatEvents[focusedIndex]);
+      }
+    },
+    [flatEvents, focusedIndex, onSelectEvent]
+  );
+
+  React.useEffect(() => {
+    setFocusedIndex(-1);
+  }, [selectedType, selectedAgent]);
+
+  React.useEffect(() => {
+    if (!listRef.current || focusedIndex < 0) return;
+    const focusedItem = listRef.current.querySelector<HTMLElement>(`[data-event-index="${focusedIndex}"]`);
+    focusedItem?.scrollIntoView({ block: "nearest" });
+  }, [focusedIndex]);
+
   const handleRefresh = React.useCallback(() => {
     void onRefresh();
   }, [onRefresh]);
@@ -223,7 +276,14 @@ export function EventFeed({
         </div>
       </div>
       <Separator className="flex-shrink-0" />
-      <div className="flex-1 overflow-y-auto p-4" data-testid="event-feed">
+      <div
+        ref={listRef}
+        tabIndex={0}
+        role="listbox"
+        onKeyDown={handleKeyDown}
+        className="flex-1 overflow-y-auto p-4"
+        data-testid="event-feed"
+      >
         <div className="space-y-4">
           {groupedEvents.map((group, groupIndex) => (
             <div key={group.key} className="space-y-3">
@@ -238,14 +298,20 @@ export function EventFeed({
                   const agent = event.agentId ? agentById[event.agentId] : null;
                   const isNew = groupIndex === 0 && index === 0;
                   const icon = eventIcon[event.type] ?? "⚡";
+                  const flatIndex = flatEvents.findIndex((candidate) => candidate.id === event.id);
+                  const isFocused = focusedIndex === flatIndex;
                   return (
                     <button
                       key={event.id}
                       type="button"
                       data-testid="event-item"
+                      data-event-index={flatIndex}
+                      role="option"
+                      aria-selected={isFocused}
                       onClick={() => onSelectEvent(event)}
                       className={cn(
                         "flex w-full gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left transition-all hover:bg-muted/60 min-h-[44px]",
+                        isFocused && "ring-2 ring-primary/60",
                         isNew && "animate-in slide-in-from-top-2 fade-in duration-300"
                       )}
                     >

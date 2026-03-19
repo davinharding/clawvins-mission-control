@@ -1,10 +1,12 @@
 import * as React from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { CostBarChart } from '@/components/CostBarChart';
 import { getCosts, type CostData, type Agent } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { RefreshCw } from 'lucide-react';
 
 type Period = 'hour' | 'day' | 'week' | 'month';
 
@@ -18,23 +20,25 @@ export function CostDashboard({ agents }: Props) {
   const [error, setError] = React.useState<string | null>(null);
   const [period, setPeriod] = React.useState<Period>('day');
   const [showAnthropic, setShowAnthropic] = React.useState(true);
+  const [lastUpdated, setLastUpdated] = React.useState<number | null>(null);
 
-  React.useEffect(() => {
-    loadCostData();
-  }, [period]);
-
-  const loadCostData = async () => {
+  const loadCostData = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getCosts({ period, limit: 30 });
       setCostData(data);
+      setLastUpdated(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load cost data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
+
+  React.useEffect(() => {
+    void loadCostData();
+  }, [loadCostData]);
 
   const agentById = React.useMemo(() => {
     return agents.reduce<Record<string, Agent>>((acc, agent) => {

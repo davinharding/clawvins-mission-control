@@ -169,6 +169,21 @@ export function CostDashboard({ agents }: Props) {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Cost Over Time</h3>
         <div className="flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-[10px] text-muted-foreground font-mono">
+              Updated {new Date(lastUpdated).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2"
+            onClick={loadCostData}
+            disabled={loading}
+            aria-label="Refresh cost data"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
           <label className="text-xs font-semibold uppercase text-muted-foreground">Period:</label>
           <Select
             value={period}

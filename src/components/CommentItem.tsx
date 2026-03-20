@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Comment } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/time";
-import { LinkifiedText } from "@/components/LinkifiedText";
+import { renderMarkdown } from "@/lib/markdown";
 
 type CommentItemProps = {
   comment: Comment;
@@ -25,9 +25,10 @@ export function CommentItem({ comment }: CommentItemProps) {
             {formatRelativeTime(comment.createdAt)}
           </span>
         </div>
-        <p className="text-sm text-foreground/90">
-          <LinkifiedText text={comment.text} />
-        </p>
+        <div
+          className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground/90 [&_a]:break-words"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(comment.text) }}
+        />
       </div>
     </div>
   );

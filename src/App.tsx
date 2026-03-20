@@ -2008,6 +2008,13 @@ export default function HomePage() {
         event={selectedEvent}
         agentName={selectedEvent?.agentId ? agentById[selectedEvent.agentId]?.name : undefined}
         onClose={() => setSelectedEvent(null)}
+        onOpenTask={(id) => {
+          const task = tasks.find(t => t.id === id);
+          if (task) {
+            setActiveTaskId(task.id);
+            setModalOpen(true);
+          }
+        }}
       />
 
       <BulkActionBar

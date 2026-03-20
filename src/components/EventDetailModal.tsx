@@ -7,9 +7,10 @@ type Props = {
   agentName?: string;
   open: boolean;
   onClose: () => void;
+  onOpenTask?: (taskId: string) => void;
 };
 
-export function EventDetailModal({ event, agentName, open, onClose }: Props) {
+export function EventDetailModal({ event, agentName, open, onClose, onOpenTask }: Props) {
   // Close on Escape key
   React.useEffect(() => {
     if (!open) return;
@@ -94,6 +95,21 @@ export function EventDetailModal({ event, agentName, open, onClose }: Props) {
                 <LinkifiedText text={event.message} />
               </p>
             </div>
+          )}
+
+
+          {/* View Task Link */}
+          {event.taskId && onOpenTask && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenTask(event.taskId!);
+                onClose();
+              }}
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+            >
+              📋 View Task
+            </button>
           )}
 
           {/* Tool calls */}

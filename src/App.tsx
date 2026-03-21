@@ -433,6 +433,18 @@ export default function HomePage() {
     []
   );
 
+  const handleClearAllNotifications = React.useCallback(() => {
+    setNotifications([]);
+    try {
+      if (typeof window === "undefined") {
+        return;
+      }
+      window.localStorage.removeItem(NOTIFICATIONS_KEY);
+    } catch {
+      // Ignore localStorage failures (quota/private mode)
+    }
+  }, []);
+
   React.useEffect(() => {
     activeTaskIdRef.current = activeTaskId;
   }, [activeTaskId]);

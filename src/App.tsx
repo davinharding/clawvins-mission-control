@@ -631,6 +631,17 @@ export default function HomePage() {
     [tasks]
   );
 
+  React.useEffect(() => {
+    const inProgressCount = boardTasks.filter((task) => task.status === "in-progress").length;
+
+    if (inProgressCount > 0) {
+      document.title = "(" + inProgressCount + ") Mission Control";
+      return;
+    }
+
+    document.title = "Mission Control";
+  }, [boardTasks]);
+
   const taskCountByAgent = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const task of tasks) {

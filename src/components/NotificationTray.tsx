@@ -16,6 +16,7 @@ type Props = {
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  onClearAll: () => void;
   onClickNotification: (n: Notification) => void;
 };
 
@@ -23,6 +24,7 @@ export function NotificationTray({
   notifications,
   onMarkRead,
   onMarkAllRead,
+  onClearAll,
   onClickNotification,
 }: Props) {
   const [open, setOpen] = React.useState(false);
@@ -72,6 +74,15 @@ export function NotificationTray({
                     className="text-xs text-primary hover:underline"
                   >
                     Mark all read
+                  </button>
+                )}
+                {notifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={onClearAll}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Clear All
                   </button>
                 )}
                 <button

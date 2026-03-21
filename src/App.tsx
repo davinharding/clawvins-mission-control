@@ -133,6 +133,7 @@ const emptyColumnMessages: Record<TaskStatus, string> = {
 
 const ARCHIVE_DROP_ID = "archive-panel";
 const COLUMN_SORTS_KEY = "mc_column_sorts";
+const NOTIFICATIONS_KEY = "mc_notifications";
 
 const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
   low: "outline",
@@ -367,7 +368,27 @@ export default function HomePage() {
       return defaultColumnSorts;
     }
   });
-  const [notifications, setNotifications] = React.useState<Notification[]>([]);
+  const [notifications, setNotifications] = React.useState<Notification[]>(() => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const stored = window.localStorage.getItem(NOTIFICATIONS_KEY);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.slice(0, 50) as Notification[];
+  } catch {
+    return [];
+  }
+});
   const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = React.useState<EventItem | null>(null);
   const relativeNow = useRelativeTime();

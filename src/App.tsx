@@ -384,7 +384,7 @@ export default function HomePage() {
       return [];
     }
 
-    return parsed.slice(0, 50) as Notification[];
+    return parsed.slice(-50) as Notification[];
   } catch {
     return [];
   }
@@ -447,6 +447,20 @@ export default function HomePage() {
       // Ignore localStorage write failures (quota/private mode)
     }
   }, [columnSorts]);
+
+  React.useEffect(() => {
+    try {
+      if (typeof window === "undefined") {
+        return;
+      }
+      window.localStorage.setItem(
+        NOTIFICATIONS_KEY,
+        JSON.stringify(notifications.slice(-50))
+      );
+    } catch {
+      // Ignore localStorage write failures (quota/private mode)
+    }
+  }, [notifications]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -1224,6 +1238,7 @@ export default function HomePage() {
               onMarkAllRead={() =>
                 setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
               }
+              onClearAll={handleClearAllNotifications}
               onClickNotification={(n) => {
                 if (n.taskId) {
                   setActiveTaskId(n.taskId);
@@ -1425,6 +1440,7 @@ export default function HomePage() {
                   onMarkAllRead={() =>
                     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
                   }
+                  onClearAll={handleClearAllNotifications}
                   onClickNotification={(n) => {
                     if (n.taskId) {
                       setActiveTaskId(n.taskId);

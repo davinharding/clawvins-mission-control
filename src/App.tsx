@@ -400,6 +400,7 @@ export default function HomePage() {
   const isSelecting = selectedTaskIds.size > 0;
   const [archivedTasks, setArchivedTasks] = React.useState<Task[]>([]);
   const activeTaskIdRef = React.useRef<string | null>(null);
+  const isInitialConnect = React.useRef(true);
   const { notify } = useToast();
 
   // Login form state
@@ -543,11 +544,39 @@ export default function HomePage() {
   React.useEffect(() => {
     if (!token) return;
 
+    isInitialConnect.current = true;
+
     const { socket, onConnectionStateChange, getConnectionState } = createSocket(token);
     setConnectionState(getConnectionState());
     const unsubscribe = onConnectionStateChange(setConnectionState);
 
     socket.on("connect", () => {
+      if (isInitialConnect.current) {
+        isInitialConnect.current = false;
+        return;
+      }
+
+      Promise.all([
+        getTasks(),
+        getAgents(),
+        getEvents({ limit: EVENTS_PAGE_LIMIT }),
+        getArchivedTasks(),
+        getTaskStats(),
+      ])
+        .then(([tasksResponse, agentsResponse, eventsResponse, archivedResponse, statsResponse]) => {
+          setTasks(tasksResponse.tasks);
+          setAgents(agentsResponse.agents);
+          setEvents(mergeEvents([], eventsResponse.events));
+          setEventsHasMore(eventsResponse.events.length >= EVENTS_PAGE_LIMIT);
+          setArchivedTasks(archivedResponse.tasks);
+          setTaskStats(statsResponse);
+          notify({
+            title: "Reconnected — data refreshed",
+          });
+        })
+        .catch((err) => {
+          console.error("[WebSocket] Failed to refresh data after reconnect:", err);
+        });
     });
 
     socket.on("task.created", (payload: TaskPayload) => {

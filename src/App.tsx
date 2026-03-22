@@ -134,6 +134,7 @@ const emptyColumnMessages: Record<TaskStatus, string> = {
 const ARCHIVE_DROP_ID = "archive-panel";
 const COLUMN_SORTS_KEY = "mc_column_sorts";
 const NOTIFICATIONS_KEY = "mc_notifications";
+const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
 const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
   low: "outline",
@@ -1719,6 +1720,8 @@ export default function HomePage() {
                         {rowTasks.map((task) => {
                           const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
                           const priority = (task.priority || "low") as TaskPriority;
+                          const timestamp = task.updatedAt ?? task.createdAt;
+                          const isStale = (relativeNow - timestamp) > STALE_THRESHOLD_MS && ["todo", "in-progress", "testing"].includes(status);
                           const agentEmoji = agent ? getAgentEmoji(agent.name) : null;
                           const agentInitials = agent
                             ? agentEmoji ?? agent.name.split(" ").map((p) => p[0]).join("")
@@ -1757,6 +1760,7 @@ export default function HomePage() {
                                     </AvatarFallback>
                                   </Avatar>
                                   <span className="truncate">{agentName}</span>
+                                  {isStale && <span className="text-amber-400/80">⏳</span>}
                                 </div>
                               </div>
                             </DraggableCard>
@@ -1835,6 +1839,7 @@ export default function HomePage() {
                               const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
                               const priority = (task.priority || "low") as TaskPriority;
                               const timestamp = task.updatedAt ?? task.createdAt;
+                              const isStale = (relativeNow - timestamp) > STALE_THRESHOLD_MS && ["todo", "in-progress", "testing"].includes(column);
                               const taskTags = (task.tags ?? []).map((tag) => tag.trim()).filter(Boolean);
                               const visibleTags = taskTags.slice(0, 3);
                               const overflowCount = taskTags.length - visibleTags.length;
@@ -1915,7 +1920,7 @@ export default function HomePage() {
                                           )}
                                           <span>{agent?.name ?? "Unassigned"}</span>
                                         </div>
-                                        <span className="font-mono">{formatRelativeTime(timestamp, relativeNow)}</span>
+                                        <span className={cn("font-mono", isStale && "text-amber-400/80")}>{isStale ? "⏳ " : ""}{formatRelativeTime(timestamp, relativeNow)}</span>
                                       </div>
                                       {(task.commentCount ?? 0) > 0 && (
                                         <div className="flex items-center gap-1 text-xs text-muted-foreground">

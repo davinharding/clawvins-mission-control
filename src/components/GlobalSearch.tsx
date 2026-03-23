@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { searchTasks, type SearchResult, type TaskStatus } from "@/lib/api";
+import { getAgentEmoji } from "@/lib/agents";
 
 // ── Status metadata ──────────────────────────────────────────────────────────
 
@@ -36,26 +37,6 @@ const statusVariant: Record<TaskStatus, "default" | "outline" | "warning" | "dan
 
 // Status display order for grouping
 const STATUS_ORDER: TaskStatus[] = ["in-progress", "todo", "testing", "backlog", "done"];
-
-// ── Emoji avatar map (mirrors App.tsx) ───────────────────────────────────────
-
-const agentEmojiMap: Record<string, string> = {
-  clawvin: "🐾",
-  patch:   "🔧",
-  scout:   "🎯",
-  vitals:  "💪",
-  alpha:   "🔍",
-  iris:    "📨",
-  nova:    "✨",
-  ledger:  "📒",
-  atlas:   "🏋️",
-};
-
-const getAgentEmoji = (agentId?: string | null): string => {
-  if (!agentId) return "🤖";
-  const key = agentId.split("-")[0].toLowerCase();
-  return agentEmojiMap[key] ?? "🤖";
-};
 
 // ── Highlight matching text ──────────────────────────────────────────────────
 
@@ -308,7 +289,7 @@ export function GlobalSearch({ onOpenTask, compact = false }: GlobalSearchProps)
                             >
                               {/* Agent emoji */}
                               <span className="flex-shrink-0 text-lg mt-0.5">
-                                {getAgentEmoji(result.assignedAgent)}
+                                {getAgentEmoji(result.assignedAgent ?? "")}
                               </span>
 
                               {/* Content */}

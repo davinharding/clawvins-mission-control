@@ -9,6 +9,9 @@ import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/time";
 import { stripMarkdown } from "@/lib/markdown";
+import { getAgentEmoji, roleAvatarBg, roleAvatarText, statusColor, statusRing } from "@/lib/agents";
+import { columnBg, columnColors, columnEmojis, columnLabels, columns, emptyColumnMessages, priorityVariant } from "@/lib/columns";
+import { columnSortOptions, defaultColumnSorts, sortTasks, type ColumnSort, validColumnSorts } from "@/lib/sorts";
 import type {
   Agent,
   AgentRole,
@@ -84,152 +87,6 @@ const roles: Array<{ label: string; value: AgentRole | "All" }> = [
   { label: "Ops", value: "Ops" }
 ];
 
-const columns: TaskStatus[] = ["backlog", "todo", "in-progress", "testing", "done"];
-
-const columnLabels: Record<TaskStatus, string> = {
-  backlog: "Backlog",
-  todo: "To Do",
-  "in-progress": "In Progress",
-  testing: "Testing",
-  done: "Done",
-  archived: "Archived",
-};
-
-const columnEmojis: Record<TaskStatus, string> = {
-  backlog: "📋",
-  todo: "🎯",
-  "in-progress": "⚡",
-  testing: "🧪",
-  done: "✅",
-  archived: "🗄️",
-};
-
-const columnColors: Record<TaskStatus, string> = {
-  backlog: "text-muted-foreground",
-  todo: "text-sky-400",
-  "in-progress": "text-violet-400",
-  testing: "text-amber-400",
-  done: "text-emerald-400",
-  archived: "text-muted-foreground",
-};
-
-const columnBg: Record<TaskStatus, string> = {
-  backlog: "",
-  todo: "border-sky-500/20 bg-sky-500/5",
-  "in-progress": "border-violet-500/20 bg-violet-500/5",
-  testing: "border-amber-500/40 bg-amber-500/5",
-  done: "border-emerald-500/20 bg-emerald-500/5",
-  archived: "",
-};
-
-const emptyColumnMessages: Record<TaskStatus, string> = {
-  backlog: "No items in backlog",
-  todo: "Nothing queued up",
-  "in-progress": "No active work",
-  testing: "Nothing being tested",
-  done: "No completed tasks",
-  archived: "No archived tasks",
-};
-
-const ARCHIVE_DROP_ID = "archive-panel";
-const COLUMN_SORTS_KEY = "mc_column_sorts";
-const NOTIFICATIONS_KEY = "mc_notifications";
-const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
-
-const priorityVariant: Record<NonNullable<TaskPriority>, Parameters<typeof Badge>[0]["variant"]> = {
-  low: "outline",
-  medium: "default",
-  high: "warning",
-  critical: "danger"
-};
-
-type ColumnSort =
-  | "priority-desc"
-  | "priority-asc"
-  | "created-desc"
-  | "created-asc"
-  | "updated-desc"
-  | "updated-asc";
-
-const validColumnSorts: ReadonlySet<ColumnSort> = new Set<ColumnSort>([
-  "priority-desc",
-  "priority-asc",
-  "created-desc",
-  "created-asc",
-  "updated-desc",
-  "updated-asc",
-]);
-
-const defaultColumnSorts: Record<TaskStatus, ColumnSort> = {
-  backlog: "priority-desc",
-  todo: "priority-desc",
-  "in-progress": "priority-desc",
-  testing: "priority-desc",
-  done: "priority-desc",
-  archived: "priority-desc",
-};
-
-const columnSortOptions: Array<{ label: string; value: ColumnSort }> = [
-  { label: "Priority (High → Low)", value: "priority-desc" },
-  { label: "Priority (Low → High)", value: "priority-asc" },
-  { label: "Created (Newest)", value: "created-desc" },
-  { label: "Created (Oldest)", value: "created-asc" },
-  { label: "Updated (Newest)", value: "updated-desc" },
-  { label: "Updated (Oldest)", value: "updated-asc" },
-];
-
-const priorityWeight: Record<NonNullable<TaskPriority>, number> = {
-  low: 1,
-  medium: 2,
-  high: 3,
-  critical: 4,
-};
-
-const statusColor: Record<Agent["status"], string> = {
-  online: "bg-emerald-400",
-  busy: "bg-amber-400",
-  offline: "bg-slate-500"
-};
-
-const statusRing: Record<Agent["status"], string> = {
-  online: "ring-emerald-400/40",
-  busy: "ring-amber-400/40",
-  offline: "ring-slate-500/40"
-};
-
-// Emoji avatars — keyed by agent name (first word, case-insensitive)
-const agentEmojiMap: Record<string, string> = {
-  clawvin: "🐾",
-  patch:   "🔧",
-  scout:   "🎯",
-  vitals:  "💪",
-  alpha:   "🔍",
-  iris:    "📨",
-  nova:    "✨",
-  ledger:  "📒",
-  atlas:   "🏋️",
-};
-
-// Category-based avatar background colors
-const roleAvatarBg: Record<AgentRole, string> = {
-  Main:     "bg-blue-500/20",
-  Dev:      "bg-amber-500/20",
-  Research: "bg-purple-500/20",
-  Ops:      "bg-emerald-500/20",
-};
-
-const roleAvatarText: Record<AgentRole, string> = {
-  Main:     "text-blue-300",
-  Dev:      "text-amber-300",
-  Research: "text-purple-300",
-  Ops:      "text-emerald-300",
-};
-
-const getAgentEmoji = (name: string): string | null => {
-  const key = name.split(" ")[0].toLowerCase();
-  return agentEmojiMap[key] ?? null;
-};
-
 const useRelativeTime = (intervalMs = 60_000) => {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
@@ -265,6 +122,12 @@ const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
 
 const EVENTS_PAGE_LIMIT = 50;
 
+const ARCHIVE_DROP_ID = "archive-panel";
+const COLUMN_SORTS_KEY = "mc_column_sorts";
+const NOTIFICATIONS_KEY = "mc_notifications";
+const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
+
+
 // Mobile droppable row — unique "mobile-{status}" IDs to avoid conflicts with desktop columns
 function MobileDropRow({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: `mobile-${id}` });
@@ -284,37 +147,6 @@ function MobileDropRow({ id, children }: { id: string; children: React.ReactNode
     </div>
   );
 }
-
-const sortTasks = (items: Task[], sort: ColumnSort) => {
-  const sorted = [...items];
-  const byPriority = (task: Task) => priorityWeight[(task.priority || "low") as NonNullable<TaskPriority>] ?? 0;
-  const byCreated = (task: Task) => task.createdAt ?? 0;
-  const byUpdated = (task: Task) => task.updatedAt ?? task.createdAt ?? 0;
-
-  switch (sort) {
-    case "priority-asc":
-      sorted.sort((a, b) => byPriority(a) - byPriority(b));
-      break;
-    case "priority-desc":
-      sorted.sort((a, b) => byPriority(b) - byPriority(a));
-      break;
-    case "created-asc":
-      sorted.sort((a, b) => byCreated(a) - byCreated(b));
-      break;
-    case "created-desc":
-      sorted.sort((a, b) => byCreated(b) - byCreated(a));
-      break;
-    case "updated-asc":
-      sorted.sort((a, b) => byUpdated(a) - byUpdated(b));
-      break;
-    case "updated-desc":
-      sorted.sort((a, b) => byUpdated(b) - byUpdated(a));
-      break;
-    default:
-      return sorted;
-  }
-  return sorted;
-};
 
 export default function HomePage() {
   const [selectedRole, setSelectedRole] = React.useState<AgentRole | "All">("All");

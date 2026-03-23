@@ -1,5 +1,5 @@
 import express from 'express';
-import { getRecentEvents, getEventsSince, getEventsBefore } from '../db.js';
+import { getRecentEvents, getEventsSince, getEventsBefore, getEventsByTaskId } from '../db.js';
 import { schemas, validateQuery } from '../validation.js';
 
 const router = express.Router();
@@ -19,9 +19,12 @@ router.get('/', validateQuery(schemas.eventsQuery), (req, res) => {
     const limit = req.query.limit ?? 50;
     const since = req.query.since ?? null;
     const before = req.query.before ?? null;
+    const taskId = req.query.taskId ?? null;
 
     let events;
-    if (before) {
+    if (taskId) {
+      events = getEventsByTaskId(taskId, limit);
+    } else if (before) {
       events = getEventsBefore(before, limit);
     } else if (since) {
       events = getEventsSince(since);

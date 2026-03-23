@@ -63,6 +63,8 @@ export type EventItem = {
   detail?: EventDetail | null;
 };
 
+export type Event = EventItem;
+
 export type Comment = {
   id: string;
   taskId: string;
@@ -312,6 +314,14 @@ export async function updateAgent(id: string, updates: Partial<Agent>) {
     },
     body: JSON.stringify(updates),
   });
+}
+
+export async function getTaskEvents(taskId: string, limit = 50): Promise<Event[]> {
+  const params = new URLSearchParams({ taskId, limit: String(limit) });
+  const response = await request<{ events: Event[] }>(`/events?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+  return response.events;
 }
 
 export async function getEvents(params?: { limit?: number; since?: number; before?: number }) {

@@ -1,6 +1,7 @@
+import { TaskActivityTab } from "./TaskActivityTab";
 import * as React from "react";
-import type { Agent, Comment, Task, TaskPriority, TaskStatus } from "@/lib/api";
-import { createComment, getComments } from "@/lib/api";
+import type { Agent, Comment, EventItem, Task, TaskPriority, TaskStatus } from "@/lib/api";
+import { createComment, getComments, getTaskEvents } from "@/lib/api";
 import { Archive, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -58,6 +59,10 @@ export function TaskEditModal({
   const [loadingComments, setLoadingComments] = React.useState(false);
   const [postingComment, setPostingComment] = React.useState(false);
   const [newComment, setNewComment] = React.useState("");
+  const [activeTab, setActiveTab] = React.useState<"comments" | "activity">("comments");
+  const [activityEvents, setActivityEvents] = React.useState<EventItem[]>([]);
+  const [loadingActivity, setLoadingActivity] = React.useState(false);
+  const [activityLoaded, setActivityLoaded] = React.useState(false);
 
   React.useEffect(() => {
     if (!task) return;
@@ -174,6 +179,28 @@ export function TaskEditModal({
       });
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleOpenActivityTab = async () => {
+    if (!task) return;
+
+    setActiveTab("activity");
+    if (activityLoaded) return;
+
+    setLoadingActivity(true);
+    try {
+      const events = await getTaskEvents(task.id);
+      setActivityEvents(events);
+      setActivityLoaded(true);
+    } catch (err) {
+      notify({
+        title: "Failed to load activity",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
+    } finally {
+      setLoadingActivity(false);
     }
   };
 
@@ -324,6 +351,24 @@ export function TaskEditModal({
         </div>
 
         <Separator className="my-6" />
+        <div className="mb-4 flex items-center gap-2">
+          <Button
+            type="button"
+            variant={activeTab === "comments" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("comments")}
+          >
+            Comments
+          </Button>
+          <Button
+            type="button"
+            variant={activeTab === "activity" ? "default" : "ghost"}
+            size="sm"
+            onClick={handleOpenActivityTab}
+          >
+            Activity
+          </Button>
+        </div>
 
         <CommentsSection
           comments={comments}
@@ -333,6 +378,9 @@ export function TaskEditModal({
           draftText={newComment}
           onDraftChange={setNewComment}
         />
+        {activeTab === "activity" && (
+          <TaskActivityTab events={activityEvents} agents={agents} loading={loadingActivity} />
+        )}
         </div>{/* end scrollable body */}
 
         <DialogFooter>

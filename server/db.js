@@ -579,3 +579,14 @@ export function createComment(data) {
 }
 
 export { db };
+
+export function getEventsByTaskId(taskId, limit = 50) {
+  const stmt = db.prepare(`
+    SELECT * FROM events
+    WHERE task_id = ?
+    ORDER BY timestamp DESC
+    LIMIT ?
+  `);
+
+  return stmt.all(taskId, limit);
+}

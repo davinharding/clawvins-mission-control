@@ -370,14 +370,16 @@ export function TaskEditModal({
           </Button>
         </div>
 
-        <CommentsSection
-          comments={comments}
-          loading={loadingComments}
-          posting={postingComment}
-          onPost={handlePostComment}
-          draftText={newComment}
-          onDraftChange={setNewComment}
-        />
+        {activeTab === "comments" && (
+          <CommentsSection
+            comments={comments}
+            loading={loadingComments}
+            posting={postingComment}
+            onPost={handlePostComment}
+            draftText={newComment}
+            onDraftChange={setNewComment}
+          />
+        )}
         {activeTab === "activity" && (
           <TaskActivityTab events={activityEvents} agents={agents} loading={loadingActivity} />
         )}

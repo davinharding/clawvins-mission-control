@@ -1,5 +1,4 @@
 import * as React from "react";
-import { Archive } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,6 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { formatRelativeTime } from "@/lib/time";
 import { stripMarkdown } from "@/lib/markdown";
 import { getAgentEmoji, roleAvatarBg, roleAvatarText, statusColor, statusRing } from "@/lib/agents";
 import { columnBg, columnColors, columnEmojis, columnLabels, columns, emptyColumnMessages, priorityVariant } from "@/lib/columns";
@@ -56,8 +54,8 @@ import {
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { DraggableCard } from "@/components/DraggableCard";
+import { TaskCard } from "@/components/TaskCard";
 import { ArchivePanel } from "@/components/ArchivePanel";
-import { LinkifiedText } from "@/components/LinkifiedText";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { BulkActionBar } from "@/components/BulkActionBar";
@@ -125,7 +123,6 @@ const EVENTS_PAGE_LIMIT = 50;
 const ARCHIVE_DROP_ID = "archive-panel";
 const COLUMN_SORTS_KEY = "mc_column_sorts";
 const NOTIFICATIONS_KEY = "mc_notifications";
-const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
 
 // Mobile droppable row — unique "mobile-{status}" IDs to avoid conflicts with desktop columns
@@ -1579,15 +1576,6 @@ export default function HomePage() {
                       {/* Droppable horizontal card row */}
                       <MobileDropRow id={status}>
                         {rowTasks.map((task) => {
-                          const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
-                          const priority = (task.priority || "low") as TaskPriority;
-                          const timestamp = task.updatedAt ?? task.createdAt;
-                          const isStale = (relativeNow - timestamp) > STALE_THRESHOLD_MS && ["todo", "in-progress", "testing"].includes(status);
-                          const agentEmoji = agent ? getAgentEmoji(agent.name) : null;
-                          const agentInitials = agent
-                            ? agentEmoji ?? agent.name.split(" ").map((p) => p[0]).join("")
-                            : "?";
-                          const agentName = agent?.name ?? "Unassigned";
                           return (
                             <DraggableCard
                               key={task.id}
@@ -1597,33 +1585,16 @@ export default function HomePage() {
                               onSelect={(shiftKey) => handleSelectTask(task.id, shiftKey, rowTasks)}
                               onLongPress={() => handleLongPressTask(task.id)}
                             >
-                              <div
-                                className="min-w-[200px] max-w-[220px] flex-shrink-0 rounded-lg border border-border/60 bg-card/70 px-2.5 py-2 cursor-pointer active:opacity-70"
-                                onClick={() => { if (!isSelecting) { setActiveTaskId(task.id); setModalOpen(true); } }}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    setActiveTaskId(task.id);
-                                    setModalOpen(true);
-                                  }
+                              <TaskCard
+                                task={task}
+                                agent={agents.find(a => a.id === task.assignedAgent) ?? null}
+                                relativeNow={relativeNow}
+                                variant="compact"
+                                onClick={() => {
+                                  setActiveTaskId(task.id);
+                                  setModalOpen(true);
                                 }}
-                              >
-                                <div className="flex items-start justify-between gap-1 mb-1">
-                                  <h3 className="text-xs font-semibold leading-tight line-clamp-2">{task.title}</h3>
-                                  <Badge variant={priorityVariant[priority]} className="text-[10px] px-1.5 shrink-0">{priority}</Badge>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                                  <Avatar className={cn("h-4 w-4", agent ? roleAvatarBg[agent.role] : "")}>
-                                    <AvatarFallback className={cn("text-[8px]", agentEmoji ? "text-[10px] leading-none" : (agent ? roleAvatarText[agent.role] : ""))}>
-                                      {agentInitials}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="truncate">{agentName}</span>
-                                  {isStale && <span className="text-amber-400/80">⏳</span>}
-                                </div>
-                              </div>
+                              />
                             </DraggableCard>
                           );
                         })}
@@ -1698,12 +1669,6 @@ export default function HomePage() {
                           >
                             {columnTasks.map((task) => {
                               const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
-                              const priority = (task.priority || "low") as TaskPriority;
-                              const timestamp = task.updatedAt ?? task.createdAt;
-                              const isStale = (relativeNow - timestamp) > STALE_THRESHOLD_MS && ["todo", "in-progress", "testing"].includes(column);
-                              const taskTags = (task.tags ?? []).map((tag) => tag.trim()).filter(Boolean);
-                              const visibleTags = taskTags.slice(0, 3);
-                              const overflowCount = taskTags.length - visibleTags.length;
                               return (
                                 <DraggableCard
                                   key={task.id}
@@ -1713,102 +1678,10 @@ export default function HomePage() {
                                   onSelect={(shiftKey) => handleSelectTask(task.id, shiftKey, columnTasks)}
                                   onLongPress={() => handleLongPressTask(task.id)}
                                 >
-                                  <Card
-                                    onClick={() => {
-                                      if (!isSelecting) {
-                                        setActiveTaskId(task.id);
-                                        setModalOpen(true);
-                                      }
-                                    }}
-                                    onKeyDown={(event) => {
-                                      if (!isSelecting && (event.key === "Enter" || event.key === " ")) {
-                                        event.preventDefault();
-                                        setActiveTaskId(task.id);
-                                        setModalOpen(true);
-                                      }
-                                    }}
-                                    role="button"
-                                    tabIndex={0}
-                                    className="min-h-[44px]"
-                                  >
-                                    <CardHeader className="space-y-2 p-4">
-                                      <div className="flex items-start justify-between gap-3">
-                                        <h3 className="text-sm font-semibold leading-snug">
-                                          <LinkifiedText text={task.title} />
-                                        </h3>
-                                        <div className="flex items-center gap-1 flex-shrink-0">
-                                          {column === "done" && (
-                                            <button
-                                              type="button"
-                                              title="Archive task"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleArchiveTask(task.id);
-                                              }}
-                                              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-all"
-                                            >
-                                              <Archive className="h-3 w-3" />
-                                            </button>
-                                          )}
-                                          <Badge
-                                            variant={priorityVariant[priority]}
-                                            className="px-2 py-0.5 text-[10px] uppercase tracking-wide"
-                                          >
-                                            {priority}
-                                          </Badge>
-                                        </div>
-                                      </div>
-                                      {task.description && (
-                                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                                          {stripMarkdown(task.description)}
-                                        </p>
-                                      )}
-                                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                        <div className="flex items-center gap-3">
-                                          {agent ? (() => {
-                                            const emoji = getAgentEmoji(agent.name);
-                                            return (
-                                              <Avatar className={cn("h-7 w-7", roleAvatarBg[agent.role])}>
-                                                <AvatarFallback className={cn("text-[10px]", emoji ? "text-base leading-none" : roleAvatarText[agent.role])}>
-                                                  {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
-                                                </AvatarFallback>
-                                              </Avatar>
-                                            );
-                                          })() : (
-                                            <Avatar className="h-7 w-7">
-                                              <AvatarFallback className="text-[10px]">?</AvatarFallback>
-                                            </Avatar>
-                                          )}
-                                          <span>{agent?.name ?? "Unassigned"}</span>
-                                        </div>
-                                        <span className={cn("font-mono", isStale && "text-amber-400/80")}>{isStale ? "⏳ " : ""}{formatRelativeTime(timestamp, relativeNow)}</span>
-                                      </div>
-                                      {(task.commentCount ?? 0) > 0 && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                          <span>💬</span>
-                                          <span>{task.commentCount}</span>
-                                        </div>
-                                      )}
-                                      {taskTags.length > 0 && (
-                                        <div className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
-                                          {visibleTags.map((tag, index) => (
-                                            <Badge
-                                              key={`${tag}-${index}`}
-                                              variant="outline"
-                                              className="px-1.5 py-0 text-[10px] text-muted-foreground/80 border-muted/40 bg-muted/20"
-                                            >
-                                              {tag}
-                                            </Badge>
-                                          ))}
-                                          {overflowCount > 0 && (
-                                            <span className="px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
-                                              +{overflowCount}
-                                            </span>
-                                          )}
-                                        </div>
-                                      )}
-                                    </CardHeader>
-                                  </Card>
+                                  <TaskCard task={task} agent={agent} relativeNow={relativeNow} variant="full" onClick={() => {
+                                    setActiveTaskId(task.id);
+                                    setModalOpen(true);
+                                  }} />
                                 </DraggableCard>
                               );
                             })}

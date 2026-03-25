@@ -65,6 +65,17 @@ export function TaskEditModal({
   const [activityLoaded, setActivityLoaded] = React.useState(false);
 
   React.useEffect(() => {
+    if (!open || !task) {
+      setActivityEvents([]);
+      setActivityLoaded(false);
+      return;
+    }
+    setActivityEvents([]);
+    setActivityLoaded(false);
+    setActiveTab("comments");
+  }, [open, task?.id]);
+
+  React.useEffect(() => {
     if (!task) return;
     setTitle(task.title);
     setDescription(task.description ?? "");

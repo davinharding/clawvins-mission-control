@@ -1,14 +1,12 @@
 import * as React from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { stripMarkdown } from "@/lib/markdown";
 import { getAgentEmoji, roleAvatarBg, roleAvatarText, statusColor, statusRing } from "@/lib/agents";
-import { columnBg, columnColors, columnEmojis, columnLabels, columns, emptyColumnMessages, priorityVariant } from "@/lib/columns";
+import { columnBg, columnColors, columnEmojis, columnLabels, columns, emptyColumnMessages } from "@/lib/columns";
 import { columnSortOptions, defaultColumnSorts, sortTasks, type ColumnSort, validColumnSorts } from "@/lib/sorts";
 import type {
   Agent,
@@ -1705,42 +1703,18 @@ export default function HomePage() {
                       <DragOverlay>
                 {draggingTaskId ? (() => {
                   const task = tasks.find((t) => t.id === draggingTaskId);
-                  const agent = task?.assignedAgent ? agentById[task.assignedAgent] : null;
-                  const priority = (task?.priority || "low") as TaskPriority;
                   if (!task) return null;
+                  const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
                   return (
-                    <Card className="rotate-2 shadow-2xl ring-2 ring-primary/60 opacity-95">
-                      <CardHeader className="space-y-2 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="text-sm font-semibold leading-snug">{task.title}</h3>
-                          <Badge variant={priorityVariant[priority]} className="px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                            {priority}
-                          </Badge>
-                        </div>
-                        {task.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                            {stripMarkdown(task.description)}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          {agent ? (() => {
-                            const emoji = getAgentEmoji(agent.name);
-                            return (
-                              <Avatar className={cn("h-7 w-7", roleAvatarBg[agent.role])}>
-                                <AvatarFallback className={cn("text-[10px]", emoji ? "text-base leading-none" : roleAvatarText[agent.role])}>
-                                  {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
-                                </AvatarFallback>
-                              </Avatar>
-                            );
-                          })() : (
-                            <Avatar className="h-7 w-7">
-                              <AvatarFallback className="text-[10px]">?</AvatarFallback>
-                            </Avatar>
-                          )}
-                          <span>{agent?.name ?? "Unassigned"}</span>
-                        </div>
-                      </CardHeader>
-                    </Card>
+                    <div className="rotate-2 shadow-2xl ring-2 ring-primary/60 opacity-95">
+                      <TaskCard
+                        task={task}
+                        agent={agent ?? null}
+                        relativeNow={relativeNow}
+                        variant="full"
+                        onClick={() => {}}
+                      />
+                    </div>
                   );
                 })() : null}
                       </DragOverlay>

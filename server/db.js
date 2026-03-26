@@ -98,6 +98,14 @@ function initDB() {
   // Index for timestamp filtering in cost aggregation
   db.exec('CREATE INDEX IF NOT EXISTS events_timestamp_idx ON events(timestamp)');
 
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS tasks_status_idx ON tasks(status);
+    CREATE INDEX IF NOT EXISTS tasks_assigned_agent_idx ON tasks(assigned_agent);
+    CREATE INDEX IF NOT EXISTS tasks_created_at_idx ON tasks(created_at);
+    CREATE INDEX IF NOT EXISTS events_task_id_idx ON events(task_id);
+    CREATE INDEX IF NOT EXISTS events_agent_id_idx ON events(agent_id);
+  `);
+
   // Migration: add detail column if it doesn't exist (for existing DBs)
   try {
     db.prepare("ALTER TABLE events ADD COLUMN detail TEXT").run();

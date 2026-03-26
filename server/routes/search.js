@@ -43,6 +43,7 @@ router.get('/', flexAuth, (req, res) => {
         CASE
           WHEN t.title LIKE ? THEN t.title
           WHEN t.description LIKE ? THEN t.description
+          WHEN t.tags LIKE ? THEN t.tags
           ELSE t.title
         END AS snippet
       FROM tasks t
@@ -52,6 +53,7 @@ router.get('/', flexAuth, (req, res) => {
           t.title LIKE ?
           OR t.description LIKE ?
           OR t.assigned_agent LIKE ?
+          OR t.tags LIKE ?
         )
       ORDER BY
         CASE t.status
@@ -64,7 +66,7 @@ router.get('/', flexAuth, (req, res) => {
         END,
         t.updated_at DESC
       LIMIT ?
-    `).all(likePattern, likePattern, likePattern, likePattern, likePattern, maxLimit);
+    `).all(likePattern, likePattern, likePattern, likePattern, likePattern, likePattern, maxLimit);
 
     // Search comments and join to tasks
     const commentResults = db.prepare(`
@@ -81,7 +83,10 @@ router.get('/', flexAuth, (req, res) => {
       JOIN tasks t ON c.task_id = t.id
       WHERE
         t.status != 'archived'
-        AND c.text LIKE ?
+        AND (
+          c.text LIKE ?
+          OR t.tags LIKE ?
+        )
       ORDER BY
         CASE t.status
           WHEN 'in-progress' THEN 1
@@ -93,7 +98,7 @@ router.get('/', flexAuth, (req, res) => {
         END,
         c.created_at DESC
       LIMIT ?
-    `).all(likePattern, maxLimit);
+    `).all(likePattern, likePattern, maxLimit);
 
     // Merge and deduplicate (prefer task matches over comment matches for same task)
     const seen = new Set();

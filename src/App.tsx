@@ -151,6 +151,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [selectedPriorities, setSelectedPriorities] = React.useState<TaskPriority[]>([]);
+  const [showStaleOnly, setShowStaleOnly] = React.useState(false);
   const [showStats, setShowStats] = React.useState(false);
   const [showHelp, setShowHelp] = React.useState(false);
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
@@ -604,6 +605,8 @@ export default function HomePage() {
 
   const filteredTasks = React.useMemo(() => {
     let next = baseFilteredTasks;
+    const staleThresholdMs = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
 
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (normalizedQuery) {
@@ -627,8 +630,12 @@ export default function HomePage() {
       );
     }
 
+    if (showStaleOnly) {
+      next = next.filter((task) => now - task.updatedAt > staleThresholdMs);
+    }
+
     return next;
-  }, [baseFilteredTasks, searchQuery, selectedTags, selectedPriorities]);
+  }, [baseFilteredTasks, searchQuery, selectedTags, selectedPriorities, showStaleOnly]);
 
   const showZeroTaskEmptyState = boardTasks.length === 0;
   const showFilterEmptyState = filteredTasks.length === 0 && baseFilteredTasks.length > 0;
@@ -668,6 +675,7 @@ export default function HomePage() {
     setSearchQuery("");
     setSelectedTags([]);
     setSelectedPriorities([]);
+    setShowStaleOnly(false);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -1244,6 +1252,8 @@ export default function HomePage() {
                   onToggleTag={handleToggleTag}
                   selectedPriorities={selectedPriorities}
                   onTogglePriority={handleTogglePriority}
+                  showStaleOnly={showStaleOnly}
+                  onToggleStale={() => setShowStaleOnly((prev) => !prev)}
                   onClear={handleClearTaskFilters}
                   filteredCount={filteredTasks.length}
                   totalCount={baseFilteredTasks.length}
@@ -1521,6 +1531,8 @@ export default function HomePage() {
                     onToggleTag={handleToggleTag}
                     selectedPriorities={selectedPriorities}
                     onTogglePriority={handleTogglePriority}
+                    showStaleOnly={showStaleOnly}
+                    onToggleStale={() => setShowStaleOnly((prev) => !prev)}
                     onClear={handleClearTaskFilters}
                     filteredCount={filteredTasks.length}
                     totalCount={baseFilteredTasks.length}

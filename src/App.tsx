@@ -1,12 +1,14 @@
 import * as React from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { stripMarkdown } from "@/lib/markdown";
 import { getAgentEmoji, roleAvatarBg, roleAvatarText, statusColor, statusRing } from "@/lib/agents";
-import { columnBg, columnColors, columnEmojis, columnLabels, columns, emptyColumnMessages } from "@/lib/columns";
+import { columnBg, columnColors, columnEmojis, columnLabels, columns, emptyColumnMessages, priorityVariant } from "@/lib/columns";
 import { columnSortOptions, defaultColumnSorts, sortTasks, type ColumnSort, validColumnSorts } from "@/lib/sorts";
 import type {
   Agent,
@@ -32,6 +34,7 @@ import {
   type TaskStatsResponse
 } from "@/lib/api";
 import { createSocket, type ConnectionState } from "@/lib/socket";
+import { TaskEditModal } from "@/components/TaskEditModal";
 import { EventDetailModal } from "@/components/EventDetailModal";
 import { useToast } from "@/lib/toast";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -52,8 +55,12 @@ import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { DraggableCard } from "@/components/DraggableCard";
 import { TaskCard } from "@/components/TaskCard";
+import { ArchivePanel } from "@/components/ArchivePanel";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { BulkActionBar } from "@/components/BulkActionBar";
+import { CostDashboard } from "@/components/CostDashboard";
+import { EventFeed } from "@/components/EventFeed";
 import { DashboardStats } from "@/components/DashboardStats";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -110,12 +117,6 @@ const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
   result.sort((a, b) => b.timestamp - a.timestamp);
   return result;
 };
-
-import { TaskEditModal } from "@/components/TaskEditModal";
-import { EventFeed } from "@/components/EventFeed";
-import { CostDashboard } from "@/components/CostDashboard";
-import { ArchivePanel } from "@/components/ArchivePanel";
-import { TaskSearchBar } from "@/components/TaskSearchBar";
 
 const EVENTS_PAGE_LIMIT = 50;
 
@@ -604,8 +605,6 @@ export default function HomePage() {
 
   const filteredTasks = React.useMemo(() => {
     let next = baseFilteredTasks;
-    const staleThresholdMs = 7 * 24 * 60 * 60 * 1000;
-    const now = Date.now();
 
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (normalizedQuery) {
@@ -630,6 +629,8 @@ export default function HomePage() {
     }
 
     if (showStaleOnly) {
+      const staleThresholdMs = 7 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
       next = next.filter((task) => now - task.updatedAt > staleThresholdMs);
     }
 
@@ -1165,7 +1166,7 @@ export default function HomePage() {
             <div className="flex items-center gap-1">
               <GlobalSearch
                 compact={true}
-                onOpenTask={(taskId: string) => {
+                onOpenTask={(taskId) => {
                   setActiveTaskId(taskId);
                   setModalOpen(true);
                 }}
@@ -1242,21 +1243,19 @@ export default function HomePage() {
 
           {showMobileFilters && (
             <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-1.5 space-y-1">
-                              <TaskSearchBar
-                  query={searchQuery}
-                  onQueryChange={handleSearchQueryChange}
-                  tags={availableTags}
-                  selectedTags={selectedTags}
-                  onToggleTag={handleToggleTag}
-                  selectedPriorities={selectedPriorities}
-                  onTogglePriority={handleTogglePriority}
-                  showStaleOnly={showStaleOnly}
-                  onToggleStale={() => setShowStaleOnly((prev) => !prev)}
-                  onClear={handleClearTaskFilters}
-                  filteredCount={filteredTasks.length}
-                  totalCount={baseFilteredTasks.length}
-                />
-                          </div>
+              <TaskSearchBar
+                query={searchQuery}
+                onQueryChange={handleSearchQueryChange}
+                tags={availableTags}
+                selectedTags={selectedTags}
+                onToggleTag={handleToggleTag}
+                selectedPriorities={selectedPriorities}
+                onTogglePriority={handleTogglePriority}
+                onClear={handleClearTaskFilters}
+                filteredCount={filteredTasks.length}
+                totalCount={baseFilteredTasks.length}
+              />
+            </div>
           )}
 
           {showStats && (
@@ -1297,7 +1296,7 @@ export default function HomePage() {
             <div className="flex flex-col items-end gap-3 text-sm">
               <div className="flex items-center gap-2">
                 <GlobalSearch
-                  onOpenTask={(taskId: string) => {
+                  onOpenTask={(taskId) => {
                     setActiveTaskId(taskId);
                     setModalOpen(true);
                   }}
@@ -1379,17 +1378,17 @@ export default function HomePage() {
             className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur"
             style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
-                          <EventFeed
-                events={events}
-                agentById={agentById}
-                onSelectEvent={handleSelectEvent}
-                onRefresh={handleRefreshEvents}
-                onLoadMore={handleLoadMoreEvents}
-                hasMore={eventsHasMore}
-                isLoadingMore={eventsLoadingMore}
-                onClose={() => setShowEventFeed(false)}
-              />
-                      </div>
+            <EventFeed
+              events={events}
+              agentById={agentById}
+              onSelectEvent={handleSelectEvent}
+              onRefresh={handleRefreshEvents}
+              onLoadMore={handleLoadMoreEvents}
+              hasMore={eventsHasMore}
+              isLoadingMore={eventsLoadingMore}
+              onClose={() => setShowEventFeed(false)}
+            />
+          </div>
         )}
 
         <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-4 sm:gap-6 px-2 sm:px-6 py-2 sm:py-6 lg:grid-cols-[240px_1fr_360px]">
@@ -1507,8 +1506,8 @@ export default function HomePage() {
             {/* Cost Dashboard View */}
             {showCostDashboard && (
               <div className="flex-1 overflow-y-auto pb-6">
-                                  <CostDashboard agents={agents} />
-                              </div>
+                <CostDashboard agents={agents} />
+              </div>
             )}
 
 
@@ -1524,8 +1523,6 @@ export default function HomePage() {
                     onToggleTag={handleToggleTag}
                     selectedPriorities={selectedPriorities}
                     onTogglePriority={handleTogglePriority}
-                    showStaleOnly={showStaleOnly}
-                    onToggleStale={() => setShowStaleOnly((prev) => !prev)}
                     onClear={handleClearTaskFilters}
                     filteredCount={filteredTasks.length}
                     totalCount={baseFilteredTasks.length}
@@ -1716,35 +1713,59 @@ export default function HomePage() {
                       <DragOverlay>
                 {draggingTaskId ? (() => {
                   const task = tasks.find((t) => t.id === draggingTaskId);
+                  const agent = task?.assignedAgent ? agentById[task.assignedAgent] : null;
+                  const priority = (task?.priority || "low") as TaskPriority;
                   if (!task) return null;
-                  const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
                   return (
-                    <div className="rotate-2 shadow-2xl ring-2 ring-primary/60 opacity-95">
-                      <TaskCard
-                        task={task}
-                        agent={agent ?? null}
-                        relativeNow={relativeNow}
-                        variant="full"
-                        onClick={() => {}}
-                      />
-                    </div>
+                    <Card className="rotate-2 shadow-2xl ring-2 ring-primary/60 opacity-95">
+                      <CardHeader className="space-y-2 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-semibold leading-snug">{task.title}</h3>
+                          <Badge variant={priorityVariant[priority]} className="px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                            {priority}
+                          </Badge>
+                        </div>
+                        {task.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                            {stripMarkdown(task.description)}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          {agent ? (() => {
+                            const emoji = getAgentEmoji(agent.name);
+                            return (
+                              <Avatar className={cn("h-7 w-7", roleAvatarBg[agent.role])}>
+                                <AvatarFallback className={cn("text-[10px]", emoji ? "text-base leading-none" : roleAvatarText[agent.role])}>
+                                  {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
+                                </AvatarFallback>
+                              </Avatar>
+                            );
+                          })() : (
+                            <Avatar className="h-7 w-7">
+                              <AvatarFallback className="text-[10px]">?</AvatarFallback>
+                            </Avatar>
+                          )}
+                          <span>{agent?.name ?? "Unassigned"}</span>
+                        </div>
+                      </CardHeader>
+                    </Card>
                   );
                 })() : null}
                       </DragOverlay>
 
                       {/* Archive Panel - inside DndContext so it can receive drops */}
                       <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
-                                  <ArchivePanel
-                    tasks={archivedTasks}
-                    agentById={agentById}
-                    onRestore={handleRestoreTask}
-                    onOpenTask={(taskId: string) => {
-                      setActiveTaskId(taskId);
-                      setModalOpen(true);
-                    }}
-                    isLoading={loading}
-                  />
-                                      </div>
+                <ArchivePanel
+                  tasks={archivedTasks}
+                  agentById={agentById}
+                  onRestore={handleRestoreTask}
+                  onOpenTask={(taskId) => {
+                    setActiveTaskId(taskId);
+                    setModalOpen(true);
+                  }}
+                  isLoading={loading}
+                />
+                      </div>
 
                       {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
                       {isSelecting && <div className="h-20 flex-shrink-0" />}
@@ -1758,16 +1779,16 @@ export default function HomePage() {
           {/* RIGHT SIDEBAR - Event Feed (desktop only; mobile uses overlay) */}
           <aside className="hidden lg:flex h-full min-h-0 flex-col">
             <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
-                              <EventFeed
-                  events={events}
-                  agentById={agentById}
-                  onSelectEvent={handleSelectEvent}
-                  onRefresh={handleRefreshEvents}
-                  onLoadMore={handleLoadMoreEvents}
-                  hasMore={eventsHasMore}
-                  isLoadingMore={eventsLoadingMore}
-                />
-                          </div>
+              <EventFeed
+                events={events}
+                agentById={agentById}
+                onSelectEvent={handleSelectEvent}
+                onRefresh={handleRefreshEvents}
+                onLoadMore={handleLoadMoreEvents}
+                hasMore={eventsHasMore}
+                isLoadingMore={eventsLoadingMore}
+              />
+            </div>
           </aside>
         </div>
 
@@ -1775,20 +1796,20 @@ export default function HomePage() {
 
       <KeyboardShortcuts open={showHelp} onClose={() => setShowHelp(false)} />
 
-              <TaskEditModal
-          open={modalOpen && !!activeTask}
-          task={activeTask}
-          agents={agents}
-          incomingComment={incomingComment}
-          onOpenChange={(nextOpen: boolean) => {
-            setModalOpen(nextOpen);
-            if (!nextOpen) setActiveTaskId(null);
-          }}
-          onSave={handleSaveTask}
-          onDelete={handleDeleteTask}
-          onArchive={handleArchiveTask}
-        />
-      
+      <TaskEditModal
+        open={modalOpen && !!activeTask}
+        task={activeTask}
+        agents={agents}
+        incomingComment={incomingComment}
+        onOpenChange={(nextOpen) => {
+          setModalOpen(nextOpen);
+          if (!nextOpen) setActiveTaskId(null);
+        }}
+        onSave={handleSaveTask}
+        onDelete={handleDeleteTask}
+        onArchive={handleArchiveTask}
+      />
+
       <EventDetailModal
         open={!!selectedEvent}
         event={selectedEvent}

@@ -3,6 +3,7 @@ import * as React from "react";
 type ErrorBoundaryProps = {
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  inline?: boolean;
 };
 
 type ErrorBoundaryState = {
@@ -28,17 +29,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       return (
-        <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
-          <p className="text-sm font-semibold text-foreground">Something went wrong</p>
-          <p className="text-xs text-muted-foreground max-w-md">
-            {this.state.error?.message || "An unexpected error occurred."}
-          </p>
+        <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
+          <span>Failed to load</span>
           <button
             type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition"
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="underline hover:text-foreground transition"
           >
-            Reload
+            Retry
           </button>
         </div>
       );

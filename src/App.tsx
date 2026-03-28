@@ -113,7 +113,7 @@ const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
   return result;
 };
 
-const TaskEditModal = React.lazy(() => import("@/components/TaskEditModal").then((m) => ({ default: m.TaskEditModal })));
+import { TaskEditModal } from "@/components/TaskEditModal";
 const EventFeed = React.lazy(() => import("@/components/EventFeed").then((m) => ({ default: m.EventFeed })));
 const CostDashboard = React.lazy(() => import("@/components/CostDashboard").then((m) => ({ default: m.CostDashboard })));
 const ArchivePanel = React.lazy(() => import("@/components/ArchivePanel").then((m) => ({ default: m.ArchivePanel })));
@@ -1787,8 +1787,7 @@ export default function HomePage() {
 
       <KeyboardShortcuts open={showHelp} onClose={() => setShowHelp(false)} />
 
-      <ErrorBoundary><Suspense fallback={null}>
-        <TaskEditModal
+      <TaskEditModal
           open={modalOpen && !!activeTask}
           task={activeTask}
           agents={agents}
@@ -1801,7 +1800,7 @@ export default function HomePage() {
           onDelete={handleDeleteTask}
           onArchive={handleArchiveTask}
         />
-      </Suspense></ErrorBoundary>
+
 
       <EventDetailModal
         open={!!selectedEvent}

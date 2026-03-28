@@ -62,8 +62,6 @@ export function TaskEditModal({
   const [activeTab, setActiveTab] = React.useState<"comments" | "activity">("comments");
   const [activityEvents, setActivityEvents] = React.useState<EventItem[]>([]);
   const [loadingActivity, setLoadingActivity] = React.useState(false);
-  const [commentsError, setCommentsError] = React.useState<string | null>(null);
-  const [activityError, setActivityError] = React.useState<string | null>(null);
   const [activityLoaded, setActivityLoaded] = React.useState(false);
   const handleSaveRef = React.useRef<() => Promise<void>>(async () => {});
 
@@ -75,7 +73,6 @@ export function TaskEditModal({
     }
     setActivityEvents([]);
     setActivityLoaded(false);
-    setActivityError(null);
     setActiveTab("comments");
   }, [open, task?.id]);
 
@@ -99,7 +96,6 @@ export function TaskEditModal({
     let mounted = true;
     // Immediately clear stale comments from any previously viewed task
     setComments([]);
-    setCommentsError(null);
     setLoadingComments(true);
     getComments(task.id)
       .then((response) => {
@@ -108,8 +104,11 @@ export function TaskEditModal({
       })
       .catch((err) => {
         if (!mounted) return;
-        setComments([]);
-        setCommentsError(err instanceof Error ? err.message : "Failed to load comments");
+        notify({
+          title: "Failed to load comments",
+          description: err instanceof Error ? err.message : "Unexpected error",
+          variant: "error",
+        });
       })
       .finally(() => {
         if (mounted) setLoadingComments(false);
@@ -228,8 +227,11 @@ export function TaskEditModal({
       setActivityEvents(events);
       setActivityLoaded(true);
     } catch (err) {
-      setActivityEvents([]);
-      setActivityError(err instanceof Error ? err.message : "Failed to load activity");
+      notify({
+        title: "Failed to load activity",
+        description: err instanceof Error ? err.message : "Unexpected error",
+        variant: "error",
+      });
     } finally {
       setLoadingActivity(false);
     }
@@ -401,9 +403,6 @@ export function TaskEditModal({
           </Button>
         </div>
 
-        {activeTab === "comments" && commentsError && (
-          <div className="text-xs text-red-400 mb-2">⚠️ {commentsError}</div>
-        )}
         {activeTab === "comments" && (
           <CommentsSection
             comments={comments}
@@ -413,9 +412,6 @@ export function TaskEditModal({
             draftText={newComment}
             onDraftChange={setNewComment}
           />
-        )}
-        {activeTab === "activity" && activityError && (
-          <div className="text-xs text-red-400 mb-2">⚠️ {activityError}</div>
         )}
         {activeTab === "activity" && (
           <TaskActivityTab events={activityEvents} agents={agents} loading={loadingActivity} />

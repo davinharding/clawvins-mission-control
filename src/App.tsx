@@ -33,6 +33,7 @@ import {
 } from "@/lib/api";
 import { createSocket, type ConnectionState } from "@/lib/socket";
 import { Suspense } from "react";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { EventDetailModal } from "@/components/EventDetailModal";
 import { useToast } from "@/lib/toast";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -1243,7 +1244,7 @@ export default function HomePage() {
 
           {showMobileFilters && (
             <div className="rounded-lg border border-border/60 bg-card/70 px-2 py-1.5 space-y-1">
-              <Suspense fallback={<div className="px-2 py-1 text-xs text-muted-foreground">Loading filters...</div>}>
+              <ErrorBoundary><Suspense fallback={<div className="px-2 py-1 text-xs text-muted-foreground">Loading filters...</div>}>
                 <TaskSearchBar
                   query={searchQuery}
                   onQueryChange={handleSearchQueryChange}
@@ -1258,7 +1259,7 @@ export default function HomePage() {
                   filteredCount={filteredTasks.length}
                   totalCount={baseFilteredTasks.length}
                 />
-              </Suspense>
+              </Suspense></ErrorBoundary>
             </div>
           )}
 
@@ -1382,7 +1383,7 @@ export default function HomePage() {
             className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur"
             style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
-            <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading event feed...</div>}>
+            <ErrorBoundary><Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading event feed...</div>}>
               <EventFeed
                 events={events}
                 agentById={agentById}
@@ -1393,7 +1394,7 @@ export default function HomePage() {
                 isLoadingMore={eventsLoadingMore}
                 onClose={() => setShowEventFeed(false)}
               />
-            </Suspense>
+            </Suspense></ErrorBoundary>
           </div>
         )}
 
@@ -1512,9 +1513,9 @@ export default function HomePage() {
             {/* Cost Dashboard View */}
             {showCostDashboard && (
               <div className="flex-1 overflow-y-auto pb-6">
-                <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading cost dashboard...</div>}>
+                <ErrorBoundary><Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading cost dashboard...</div>}>
                   <CostDashboard agents={agents} />
-                </Suspense>
+                </Suspense></ErrorBoundary>
               </div>
             )}
 
@@ -1741,7 +1742,7 @@ export default function HomePage() {
 
                       {/* Archive Panel - inside DndContext so it can receive drops */}
                       <div className="flex-shrink-0 mt-4 rounded-xl border border-border/60 overflow-hidden">
-                <Suspense fallback={<div className="p-3 text-xs text-muted-foreground">Loading archive...</div>}>
+                <ErrorBoundary><Suspense fallback={<div className="p-3 text-xs text-muted-foreground">Loading archive...</div>}>
                   <ArchivePanel
                     tasks={archivedTasks}
                     agentById={agentById}
@@ -1752,7 +1753,7 @@ export default function HomePage() {
                     }}
                     isLoading={loading}
                   />
-                </Suspense>
+                </Suspense></ErrorBoundary>
                       </div>
 
                       {/* Bottom spacer so cards aren't hidden behind bulk action bar */}
@@ -1767,7 +1768,7 @@ export default function HomePage() {
           {/* RIGHT SIDEBAR - Event Feed (desktop only; mobile uses overlay) */}
           <aside className="hidden lg:flex h-full min-h-0 flex-col">
             <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
-              <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading event feed...</div>}>
+              <ErrorBoundary><Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading event feed...</div>}>
                 <EventFeed
                   events={events}
                   agentById={agentById}
@@ -1777,7 +1778,7 @@ export default function HomePage() {
                   hasMore={eventsHasMore}
                   isLoadingMore={eventsLoadingMore}
                 />
-              </Suspense>
+              </Suspense></ErrorBoundary>
             </div>
           </aside>
         </div>
@@ -1786,7 +1787,7 @@ export default function HomePage() {
 
       <KeyboardShortcuts open={showHelp} onClose={() => setShowHelp(false)} />
 
-      <Suspense fallback={null}>
+      <ErrorBoundary><Suspense fallback={null}>
         <TaskEditModal
           open={modalOpen && !!activeTask}
           task={activeTask}
@@ -1800,7 +1801,7 @@ export default function HomePage() {
           onDelete={handleDeleteTask}
           onArchive={handleArchiveTask}
         />
-      </Suspense>
+      </Suspense></ErrorBoundary>
 
       <EventDetailModal
         open={!!selectedEvent}

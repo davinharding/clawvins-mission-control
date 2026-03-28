@@ -63,7 +63,7 @@ export function TaskEditModal({
   const [activityEvents, setActivityEvents] = React.useState<EventItem[]>([]);
   const [loadingActivity, setLoadingActivity] = React.useState(false);
   const [activityLoaded, setActivityLoaded] = React.useState(false);
-  const handleSaveRef = React.useRef<(() => Promise<void>) | null>(null);
+  const handleSaveRef = React.useRef<() => Promise<void>>(async () => {});
 
   React.useEffect(() => {
     if (!open || !task) {
@@ -181,13 +181,12 @@ export function TaskEditModal({
   React.useEffect(() => {
     if (!open) return;
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      const key = event.key.toLowerCase();
-      if (key !== "s" && key !== "enter") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key !== "s" && e.key !== "Enter") return;
 
-      event.preventDefault();
-      void handleSaveRef.current?.();
+      e.preventDefault();
+      void handleSaveRef.current();
     };
 
     window.addEventListener("keydown", onKeyDown);

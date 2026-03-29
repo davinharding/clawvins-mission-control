@@ -13,6 +13,8 @@ export type TaskSearchBarProps = {
   onToggleTag: (tag: string) => void;
   selectedPriorities: Array<"low" | "medium" | "high" | "critical">;
   onTogglePriority: (priority: "low" | "medium" | "high" | "critical") => void;
+  showStaleOnly: boolean;
+  onToggleStale: () => void;
   onClear: () => void;
   filteredCount: number;
   totalCount: number;
@@ -43,6 +45,8 @@ export function TaskSearchBar({
   onToggleTag,
   selectedPriorities,
   onTogglePriority,
+  showStaleOnly,
+  onToggleStale,
   onClear,
   filteredCount,
   totalCount,
@@ -75,7 +79,10 @@ export function TaskSearchBar({
   );
 
   const hasFilters =
-    Boolean(query.trim()) || selectedTags.length > 0 || selectedPriorities.length > 0;
+    Boolean(query.trim()) ||
+    selectedTags.length > 0 ||
+    selectedPriorities.length > 0 ||
+    showStaleOnly;
 
   const handleClear = () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -124,6 +131,19 @@ export function TaskSearchBar({
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={onToggleStale}
+              aria-pressed={showStaleOnly}
+              className="flex-shrink-0"
+            >
+              <Badge
+                variant={showStaleOnly ? "default" : "outline"}
+                className={cn("cursor-pointer", !showStaleOnly && "hover:bg-muted/60")}
+              >
+                Stale
+              </Badge>
+            </button>
           </div>
           <div
             className={cn(

@@ -152,6 +152,21 @@ router.get('/', (req, res) => {
       ORDER BY billedCost DESC
     `).all(period, fromTs, toTs);
 
+    const modelBreakdown = db.prepare(`
+      ${baseCte}
+      SELECT
+        model,
+        provider,
+        COALESCE(SUM(cost), 0) AS cost,
+        COALESCE(SUM(tokens), 0) AS tokens,
+        COUNT(*) AS count,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS anthropicCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS billedCost
+      FROM deduped
+      GROUP BY model, provider
+      ORDER BY cost DESC
+    `).all(period, fromTs, toTs);
+
     const sourceBreakdown = db.prepare(`
       ${baseCte}
       SELECT
@@ -207,6 +222,7 @@ router.get('/', (req, res) => {
       periodData,
       providerBreakdown,
       agentBreakdown,
+      modelBreakdown,
       sourceBreakdown,
       deduplication: {
         skipped: dedupSkippedCount,

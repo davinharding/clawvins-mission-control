@@ -51,6 +51,10 @@ export function CostDashboard({ agents }: Props) {
     return `$${cost.toFixed(4)}`;
   };
 
+  const formatNumber = (value: number) => {
+    return value.toLocaleString('en-US');
+  };
+
   const formatDate = (timestamp: number, period: Period) => {
     const date = new Date(timestamp);
     switch (period) {
@@ -312,6 +316,75 @@ export function CostDashboard({ agents }: Props) {
           </div>
         </Card>
       </div>
+
+      {/* Model Breakdown */}
+      {costData.modelBreakdown && costData.modelBreakdown.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Model Breakdown</h3>
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-border/60 bg-muted/30">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Model
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Provider
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Total Cost
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Billed Cost
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Anthropic Cost
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Tokens
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Requests
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {costData.modelBreakdown.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-6 text-center text-xs text-muted-foreground">
+                        No model data
+                      </td>
+                    </tr>
+                  ) : (
+                    costData.modelBreakdown.map((item, index) => (
+                      <tr key={index} className="hover:bg-muted/30 transition">
+                        <td className="px-4 py-3 font-medium">{item.model}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{item.provider}</td>
+                        <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                          {formatCost(item.cost)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          {formatCost(item.billedCost)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-emerald-400">
+                          {formatCost(item.anthropicCost)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-muted-foreground">
+                          {formatNumber(item.tokens)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-muted-foreground">
+                          {formatNumber(item.count)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Source Breakdown (if available) */}
       {costData.sourceBreakdown && costData.sourceBreakdown.length > 0 && (

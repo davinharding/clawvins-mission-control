@@ -417,6 +417,16 @@ export type AgentBreakdown = {
   count: number;
 };
 
+export type ModelBreakdown = {
+  model: string;
+  provider: string;
+  cost: number;
+  billedCost: number;
+  anthropicCost: number;
+  tokens: number;
+  count: number;
+};
+
 export type SourceBreakdown = {
   source: string;
   cost: number;
@@ -436,6 +446,7 @@ export type CostData = {
   periodData: PeriodData[];
   providerBreakdown: ProviderBreakdown[];
   agentBreakdown: AgentBreakdown[];
+  modelBreakdown?: ModelBreakdown[];
   sourceBreakdown?: SourceBreakdown[];
   deduplication?: DeduplicationInfo;
 };

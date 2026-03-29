@@ -20,15 +20,43 @@ interface Props {
 
 export function BulkActionBar({ selectedCount, onClear, onMoveTo, onArchive, onDelete }: Props) {
   const [showMoveMenu, setShowMoveMenu] = React.useState(false);
-  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const deleteTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetDeleteConfirmation = React.useCallback(() => {
+    if (deleteTimeoutRef.current) {
+      clearTimeout(deleteTimeoutRef.current);
+      deleteTimeoutRef.current = null;
+    }
+    setConfirmingDelete(false);
+  }, []);
+
+  const startDeleteConfirmation = React.useCallback(() => {
+    if (deleteTimeoutRef.current) {
+      clearTimeout(deleteTimeoutRef.current);
+    }
+    setConfirmingDelete(true);
+    deleteTimeoutRef.current = setTimeout(() => {
+      setConfirmingDelete(false);
+      deleteTimeoutRef.current = null;
+    }, 5000);
+  }, []);
 
   // Close move menu when deselected
   React.useEffect(() => {
     if (selectedCount === 0) {
       setShowMoveMenu(false);
-      setConfirmDelete(false);
+      resetDeleteConfirmation();
     }
-  }, [selectedCount]);
+  }, [selectedCount, resetDeleteConfirmation]);
+
+  React.useEffect(() => {
+    return () => {
+      if (deleteTimeoutRef.current) {
+        clearTimeout(deleteTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Close move menu on outside click
   const menuRef = React.useRef<HTMLDivElement | null>(null);
@@ -72,7 +100,7 @@ export function BulkActionBar({ selectedCount, onClear, onMoveTo, onArchive, onD
         <div className="relative" ref={menuRef}>
           <button
             type="button"
-            onClick={() => { setShowMoveMenu((v) => !v); setConfirmDelete(false); }}
+            onClick={() => { setShowMoveMenu((v) => !v); resetDeleteConfirmation(); }}
             className={cn(
               "flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition min-h-[36px]",
               showMoveMenu
@@ -104,28 +132,25 @@ export function BulkActionBar({ selectedCount, onClear, onMoveTo, onArchive, onD
         {/* Archive */}
         <button
           type="button"
-          onClick={() => { onArchive(); setShowMoveMenu(false); setConfirmDelete(false); }}
+          onClick={() => { onArchive(); setShowMoveMenu(false); resetDeleteConfirmation(); }}
           className="flex items-center gap-1 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-semibold hover:bg-muted/60 transition min-h-[36px]"
         >
           🗄 Archive
         </button>
 
         {/* Delete — inline confirm */}
-        {confirmDelete ? (
+        {confirmingDelete ? (
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-destructive">
-              Delete {selectedCount}?
-            </span>
             <button
               type="button"
-              onClick={() => { onDelete(); setConfirmDelete(false); }}
+              onClick={() => { onDelete(); resetDeleteConfirmation(); }}
               className="rounded-md bg-destructive px-2.5 py-1.5 text-xs font-semibold text-destructive-foreground hover:bg-destructive/90 transition min-h-[36px]"
             >
-              Confirm
+              Confirm Delete ({selectedCount} {selectedCount === 1 ? "task" : "tasks"})
             </button>
             <button
               type="button"
-              onClick={() => setConfirmDelete(false)}
+              onClick={resetDeleteConfirmation}
               className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-semibold hover:bg-muted/60 transition min-h-[36px]"
             >
               Cancel
@@ -134,7 +159,7 @@ export function BulkActionBar({ selectedCount, onClear, onMoveTo, onArchive, onD
         ) : (
           <button
             type="button"
-            onClick={() => { setConfirmDelete(true); setShowMoveMenu(false); }}
+            onClick={() => { startDeleteConfirmation(); setShowMoveMenu(false); }}
             className="flex items-center gap-1 rounded-md border border-destructive/50 text-destructive px-2.5 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition min-h-[36px]"
           >
             🗑 Delete

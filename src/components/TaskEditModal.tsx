@@ -63,7 +63,6 @@ export function TaskEditModal({
   const [activityEvents, setActivityEvents] = React.useState<EventItem[]>([]);
   const [loadingActivity, setLoadingActivity] = React.useState(false);
   const [activityLoaded, setActivityLoaded] = React.useState(false);
-  const handleSaveRef = React.useRef<() => Promise<void>>(async () => {});
 
   React.useEffect(() => {
     if (!open || !task) {
@@ -173,27 +172,6 @@ export function TaskEditModal({
       setSaving(false);
     }
   };
-
-  React.useEffect(() => {
-    handleSaveRef.current = handleSave;
-  }, [handleSave]);
-
-  React.useEffect(() => {
-    if (!open) return;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.key !== "s" && e.key !== "Enter") return;
-
-      e.preventDefault();
-      void handleSaveRef.current();
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
 
   const handleDelete = async () => {
     if (!task) return;
@@ -445,7 +423,7 @@ export function TaskEditModal({
             {deleting ? "Deleting..." : "Delete"}
           </Button>
           <Button onClick={handleSave} disabled={saving || deleting}>
-            {saving ? "Saving..." : "Save ⌘S"}
+            {saving ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>

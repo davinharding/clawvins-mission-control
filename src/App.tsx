@@ -151,7 +151,6 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [selectedPriorities, setSelectedPriorities] = React.useState<TaskPriority[]>([]);
-  const [showStaleOnly, setShowStaleOnly] = React.useState(false);
   const [showStats, setShowStats] = React.useState(false);
   const [showHelp, setShowHelp] = React.useState(false);
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
@@ -628,14 +627,8 @@ export default function HomePage() {
       );
     }
 
-    if (showStaleOnly) {
-      const staleThresholdMs = 7 * 24 * 60 * 60 * 1000;
-      const now = Date.now();
-      next = next.filter((task) => now - task.updatedAt > staleThresholdMs);
-    }
-
     return next;
-  }, [baseFilteredTasks, searchQuery, selectedTags, selectedPriorities, showStaleOnly]);
+  }, [baseFilteredTasks, searchQuery, selectedTags, selectedPriorities]);
 
   const showZeroTaskEmptyState = boardTasks.length === 0;
   const showFilterEmptyState = filteredTasks.length === 0 && baseFilteredTasks.length > 0;
@@ -675,7 +668,6 @@ export default function HomePage() {
     setSearchQuery("");
     setSelectedTags([]);
     setSelectedPriorities([]);
-    setShowStaleOnly(false);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {

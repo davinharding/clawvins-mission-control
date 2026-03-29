@@ -66,7 +66,7 @@ router.get('/', flexAuth, (req, res) => {
         END,
         t.updated_at DESC
       LIMIT ?
-    `).all(likePattern, likePattern, likePattern, likePattern, likePattern, likePattern, maxLimit);
+    `).all(likePattern, likePattern, likePattern, likePattern, likePattern, likePattern, likePattern, maxLimit);
 
     // Search comments and join to tasks
     const commentResults = db.prepare(`

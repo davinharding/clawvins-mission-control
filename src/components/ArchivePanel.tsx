@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import type { Task, Agent, TaskStatus } from "@/lib/api";
 
 const RESTORE_STATUSES: Array<{ label: string; value: TaskStatus }> = [
@@ -27,6 +29,8 @@ export function ArchivePanel({ tasks, agentById, onRestore, onOpenTask, isLoadin
   const [open, setOpen] = React.useState(false);
   const [restoringId, setRestoringId] = React.useState<string | null>(null);
   const [restoreMenuId, setRestoreMenuId] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedAgentId, setSelectedAgentId] = React.useState("all");
 
   const { isOver, setNodeRef } = useDroppable({ id: "archive-panel" });
 
@@ -52,6 +56,27 @@ export function ArchivePanel({ tasks, agentById, onRestore, onOpenTask, isLoadin
       hour: "2-digit",
       minute: "2-digit",
     });
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredTasks = tasks.filter((task) => {
+    const titleMatches = !normalizedQuery || task.title.toLowerCase().includes(normalizedQuery);
+    const agentMatches =
+      selectedAgentId === "all"
+      || (selectedAgentId === "unassigned" ? !task.assignedAgent : task.assignedAgent === selectedAgentId);
+    return titleMatches && agentMatches;
+  });
+
+  const agentOptions = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const task of tasks) {
+      if (task.assignedAgent && agentById[task.assignedAgent]) {
+        ids.add(task.assignedAgent);
+      }
+    }
+    return Array.from(ids).sort((left, right) =>
+      agentById[left].name.localeCompare(agentById[right].name)
+    );
+  }, [tasks, agentById]);
 
   return (
     <div
@@ -119,8 +144,36 @@ export function ArchivePanel({ tasks, agentById, onRestore, onOpenTask, isLoadin
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-              {tasks.map((task) => {
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search archived tasks"
+                  className="h-8 min-w-[180px] flex-1 rounded-lg text-xs"
+                  aria-label="Search archived tasks"
+                />
+                <Select
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="h-8 w-[170px] rounded-lg text-xs"
+                  aria-label="Filter archived tasks by agent"
+                >
+                  <option value="all">All agents</option>
+                  <option value="unassigned">Unassigned</option>
+                  {agentOptions.map((agentId) => (
+                    <option key={agentId} value={agentId}>
+                      {agentById[agentId].name}
+                    </option>
+                  ))}
+                </Select>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  Showing {filteredTasks.length} of {tasks.length}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {filteredTasks.map((task) => {
                 const agent = task.assignedAgent ? agentById[task.assignedAgent] : null;
                 const isRestoring = restoringId === task.id;
                 const showRestoreMenu = restoreMenuId === task.id;
@@ -208,8 +261,9 @@ export function ArchivePanel({ tasks, agentById, onRestore, onOpenTask, isLoadin
                     </CardHeader>
                   </Card>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            </>
           )}
         </div>
       )}

@@ -15,6 +15,7 @@ type Props = {
 };
 
 export function CostDashboard({ agents }: Props) {
+  throw new Error("Temporary ErrorBoundary verification from CostDashboard");
   const [costData, setCostData] = React.useState<CostData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);

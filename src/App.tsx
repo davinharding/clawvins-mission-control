@@ -62,6 +62,7 @@ import { BulkActionBar } from "@/components/BulkActionBar";
 import { CostDashboard } from "@/components/CostDashboard";
 import { EventFeed } from "@/components/EventFeed";
 import { DashboardStats } from "@/components/DashboardStats";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
@@ -1363,6 +1364,7 @@ export default function HomePage() {
         </div>
       </header>
 
+      <ErrorBoundary>
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile event feed overlay */}
         {showEventFeed && (
@@ -1370,6 +1372,7 @@ export default function HomePage() {
             className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur"
             style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
+            <ErrorBoundary>
             <EventFeed
               events={events}
               agentById={agentById}
@@ -1380,6 +1383,7 @@ export default function HomePage() {
               isLoadingMore={eventsLoadingMore}
               onClose={() => setShowEventFeed(false)}
             />
+          </ErrorBoundary>
           </div>
         )}
 
@@ -1770,21 +1774,24 @@ export default function HomePage() {
 
           {/* RIGHT SIDEBAR - Event Feed (desktop only; mobile uses overlay) */}
           <aside className="hidden lg:flex h-full min-h-0 flex-col">
-            <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
-              <EventFeed
-                events={events}
-                agentById={agentById}
-                onSelectEvent={handleSelectEvent}
-                onRefresh={handleRefreshEvents}
-                onLoadMore={handleLoadMoreEvents}
-                hasMore={eventsHasMore}
-                isLoadingMore={eventsLoadingMore}
-              />
-            </div>
+            <ErrorBoundary>
+              <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
+                <EventFeed
+                  events={events}
+                  agentById={agentById}
+                  onSelectEvent={handleSelectEvent}
+                  onRefresh={handleRefreshEvents}
+                  onLoadMore={handleLoadMoreEvents}
+                  hasMore={eventsHasMore}
+                  isLoadingMore={eventsLoadingMore}
+                />
+              </div>
+            </ErrorBoundary>
           </aside>
         </div>
 
       </main>
+    </ErrorBoundary>
 
       <KeyboardShortcuts open={showHelp} onClose={() => setShowHelp(false)} />
 

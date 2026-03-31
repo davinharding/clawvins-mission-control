@@ -12,7 +12,7 @@ const schemas = {
   }),
   taskCreate: z.object({
     title: z.string().min(1).max(200),
-    description: z.string().max(2000).optional(),
+    description: z.string().max(10000).optional(),
     status: taskStatus.optional(),
     assignedAgent: z.string().optional(),
     priority: taskPriority.optional(),
@@ -21,7 +21,7 @@ const schemas = {
   taskUpdate: z
     .object({
       title: z.string().min(1).max(200).optional(),
-      description: z.string().max(2000).nullable().optional(),
+      description: z.string().max(10000).nullable().optional(),
       status: taskStatus.optional(),
       assignedAgent: z.string().nullable().optional(),
       priority: taskPriority.nullable().optional(),

@@ -300,9 +300,9 @@ export function TaskEditModal({
               <Textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                maxLength={2000}
+                maxLength={10000}
                 placeholder="Describe the mission details..."
-                className="resize-y min-h-[80px] max-h-[200px] overflow-y-auto"
+                className="resize-y min-h-[80px] max-h-[400px] overflow-y-auto"
               />
             )}
           </div>

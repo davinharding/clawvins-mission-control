@@ -170,6 +170,17 @@ export function EventFeed({
     [groupedEvents]
   );
 
+  const flatIndexMap = React.useMemo(() => {
+    const map = new Map<string, number>();
+    let idx = 0;
+    for (const group of groupedEvents) {
+      for (const event of group.events) {
+        map.set(event.id, idx++);
+      }
+    }
+    return map;
+  }, [groupedEvents]);
+
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (!flatEvents.length) return;
@@ -298,7 +309,7 @@ export function EventFeed({
                   const agent = event.agentId ? agentById[event.agentId] : null;
                   const isNew = groupIndex === 0 && index === 0;
                   const icon = eventIcon[event.type] ?? "⚡";
-                  const flatIndex = flatEvents.findIndex((candidate) => candidate.id === event.id);
+                  const flatIndex = flatIndexMap.get(event.id) ?? -1;
                   const isFocused = focusedIndex === flatIndex;
                   return (
                     <button

@@ -107,9 +107,12 @@ router.get('/', (req, res) => {
         COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN tokens ELSE 0 END), 0) AS totalAnthropicTokens,
         COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS todayBilledCost,
         COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS weekBilledCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS monthBilledCost
+        COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS monthBilledCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS todayAnthropicCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS weekAnthropicCost,
+        COALESCE(SUM(CASE WHEN is_anthropic = 1 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS monthAnthropicCost
       FROM deduped
-    `).get(period, fromTs, toTs, todayStart, weekStart, monthStart);
+    `).get(period, fromTs, toTs, todayStart, weekStart, monthStart, todayStart, weekStart, monthStart);
 
     const periodData = db.prepare(`
       ${baseCte}
@@ -217,6 +220,12 @@ router.get('/', (req, res) => {
         todayBilledCost: parseFloat(summary.todayBilledCost.toFixed(4)),
         weekBilledCost: parseFloat(summary.weekBilledCost.toFixed(4)),
         monthBilledCost: parseFloat(summary.monthBilledCost.toFixed(4)),
+        todayAnthropicCost: parseFloat(summary.todayAnthropicCost.toFixed(4)),
+        weekAnthropicCost: parseFloat(summary.weekAnthropicCost.toFixed(4)),
+        monthAnthropicCost: parseFloat(summary.monthAnthropicCost.toFixed(4)),
+        todayTotalCost: parseFloat((summary.todayBilledCost + summary.todayAnthropicCost).toFixed(4)),
+        weekTotalCost: parseFloat((summary.weekBilledCost + summary.weekAnthropicCost).toFixed(4)),
+        monthTotalCost: parseFloat((summary.monthBilledCost + summary.monthAnthropicCost).toFixed(4)),
         dedupSkipped: dedupSkippedCount,
       },
       periodData,

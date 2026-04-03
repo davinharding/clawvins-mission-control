@@ -389,6 +389,12 @@ export type CostSummary = {
   totalAnthropicTokens: number;
   todayBilledCost: number;
   weekBilledCost: number;
+  todayAnthropicCost: number;
+  weekAnthropicCost: number;
+  monthAnthropicCost: number;
+  todayTotalCost: number;
+  weekTotalCost: number;
+  monthTotalCost: number;
   monthBilledCost: number;
 };
 

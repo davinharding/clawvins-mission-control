@@ -104,8 +104,16 @@ export function CostDashboard({ agents }: Props) {
             Today
           </p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold">{formatCost(costData.summary.todayBilledCost)}</span>
-            <span className="text-xs text-muted-foreground">billed</span>
+            <span className="text-3xl font-bold">{formatCost(costData.summary.todayTotalCost ?? (costData.summary.todayBilledCost + (costData.summary.todayAnthropicCost ?? 0)))}</span>
+            <span className="text-xs text-muted-foreground">total</span>
+          </div>
+          <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+            {(costData.summary.todayAnthropicCost ?? 0) > 0 && (
+              <span className="text-emerald-400">{formatCost(costData.summary.todayAnthropicCost ?? 0)} included</span>
+            )}
+            {costData.summary.todayBilledCost > 0 && (
+              <span>{formatCost(costData.summary.todayBilledCost)} billed</span>
+            )}
           </div>
         </Card>
 
@@ -114,8 +122,16 @@ export function CostDashboard({ agents }: Props) {
             This Week
           </p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold">{formatCost(costData.summary.weekBilledCost)}</span>
-            <span className="text-xs text-muted-foreground">billed</span>
+            <span className="text-3xl font-bold">{formatCost(costData.summary.weekTotalCost ?? (costData.summary.weekBilledCost + (costData.summary.weekAnthropicCost ?? 0)))}</span>
+            <span className="text-xs text-muted-foreground">total</span>
+          </div>
+          <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+            {(costData.summary.weekAnthropicCost ?? 0) > 0 && (
+              <span className="text-emerald-400">{formatCost(costData.summary.weekAnthropicCost ?? 0)} included</span>
+            )}
+            {costData.summary.weekBilledCost > 0 && (
+              <span>{formatCost(costData.summary.weekBilledCost)} billed</span>
+            )}
           </div>
         </Card>
 
@@ -124,8 +140,16 @@ export function CostDashboard({ agents }: Props) {
             This Month
           </p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold">{formatCost(costData.summary.monthBilledCost)}</span>
-            <span className="text-xs text-muted-foreground">billed</span>
+            <span className="text-3xl font-bold">{formatCost(costData.summary.monthTotalCost ?? (costData.summary.monthBilledCost + (costData.summary.monthAnthropicCost ?? 0)))}</span>
+            <span className="text-xs text-muted-foreground">total</span>
+          </div>
+          <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+            {(costData.summary.monthAnthropicCost ?? 0) > 0 && (
+              <span className="text-emerald-400">{formatCost(costData.summary.monthAnthropicCost ?? 0)} included</span>
+            )}
+            {costData.summary.monthBilledCost > 0 && (
+              <span>{formatCost(costData.summary.monthBilledCost)} billed</span>
+            )}
           </div>
         </Card>
       </div>

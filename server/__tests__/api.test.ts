@@ -165,20 +165,29 @@ const getAuthHeader = () => {
   return { Authorization: `Bearer ${token}` };
 };
 
+const getAgentAuthHeader = (agentId = 'agent-patch', agentName = 'Patch') => ({
+  'x-api-key': 'test-agent-key',
+  'x-agent-id': agentId,
+  'x-agent-name': agentName,
+});
+
 beforeAll(async () => {
   process.env.JWT_SECRET = 'test-secret';
+  process.env.AGENT_API_KEY = 'test-agent-key';
 
   const authModule = await import('../auth.js');
   authMiddleware = authModule.authMiddleware;
   generateToken = authModule.generateToken;
 
   const tasksRoutes = (await import('../routes/tasks.js')).default;
+  const agentTasksRoutes = (await import('../routes/agent-tasks.js')).default;
   const agentsRoutes = (await import('../routes/agents.js')).default;
   const eventsRoutes = (await import('../routes/events.js')).default;
 
   const app = express();
   app.use(express.json());
   app.use('/api/tasks', authMiddleware, tasksRoutes);
+  app.use('/api/agent-tasks', agentTasksRoutes);
   app.use('/api/agents', authMiddleware, agentsRoutes);
   app.use('/api/events', authMiddleware, eventsRoutes);
 
@@ -260,6 +269,74 @@ describe('API endpoints', () => {
     const data = await response.json();
     expect(data.events.length).toBe(1);
     expect(data.events[0].type).toBe('task_created');
+  });
+});
+
+describe('Agent task endpoints', () => {
+  it('returns only tasks assigned to the authenticated agent', async () => {
+    createTask({
+      title: 'Patch task',
+      status: 'todo',
+      assignedAgent: 'agent-patch',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+    createTask({
+      title: 'Other task',
+      status: 'todo',
+      assignedAgent: 'agent-nova',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+
+    const response = await fetch(`${baseUrl}/api/agent-tasks/mine`, {
+      headers: getAgentAuthHeader(),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.count).toBe(1);
+    expect(data.tasks[0].title).toBe('Patch task');
+    expect(data.tasks[0].assignedAgent).toBe('agent-patch');
+  });
+
+  it('allows agents to move tasks through testing and archived statuses', async () => {
+    const task = createTask({
+      title: 'Lifecycle task',
+      status: 'todo',
+      assignedAgent: 'agent-patch',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+
+    const testingResponse = await fetch(`${baseUrl}/api/agent-tasks/${task.id}/status`, {
+      method: 'PATCH',
+      headers: {
+        ...getAgentAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: 'testing' }),
+    });
+    const testing = await testingResponse.json();
+
+    expect(testingResponse.status).toBe(200);
+    expect(testing.task.status).toBe('testing');
+
+    const archivedResponse = await fetch(`${baseUrl}/api/agent-tasks/${task.id}/status`, {
+      method: 'PATCH',
+      headers: {
+        ...getAgentAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: 'archived' }),
+    });
+    const archived = await archivedResponse.json();
+
+    expect(archivedResponse.status).toBe(200);
+    expect(archived.task.status).toBe('archived');
   });
 });
 

@@ -11,9 +11,23 @@ import {
   createComment,
   createEvent,
 } from '../db.js';
-import { authMiddleware } from '../auth.js';
+import { authMiddleware, agentKeyMiddleware } from '../auth.js';
 
 const router = express.Router();
+
+const validStatuses = ['backlog', 'todo', 'in-progress', 'testing', 'done', 'archived'];
+
+const flexAuth = (req, res, next) => {
+  const key = req.headers['x-api-key'] || req.headers['x-agent-key'];
+  if (key) {
+    return agentKeyMiddleware(req, res, (err) => {
+      if (err) return next(err);
+      if (req.user) return next();
+      return authMiddleware(req, res, next);
+    });
+  }
+  return authMiddleware(req, res, next);
+};
 
 /**
  * Format task for API response
@@ -35,10 +49,10 @@ const formatTask = (task) => ({
  * GET /api/agent-tasks/mine
  * Get all tasks assigned to authenticated agent
  */
-router.get('/mine', authMiddleware, (req, res) => {
+router.get('/mine', flexAuth, (req, res) => {
   try {
     const agentId = req.user.id;
-    const tasks = getAllTasks({ agent: agentId });
+    const tasks = getAllTasks({ assignedAgent: agentId });
     
     res.json({
       tasks: tasks.map(formatTask),
@@ -54,7 +68,7 @@ router.get('/mine', authMiddleware, (req, res) => {
  * GET /api/agent-tasks/:taskId
  * Get specific task details
  */
-router.get('/:taskId', authMiddleware, (req, res) => {
+router.get('/:taskId', flexAuth, (req, res) => {
   try {
     const task = getTaskById(req.params.taskId);
     
@@ -75,7 +89,7 @@ router.get('/:taskId', authMiddleware, (req, res) => {
  * PATCH /api/agent-tasks/:taskId/status
  * Update task status (simplified for agents)
  */
-router.patch('/:taskId/status', authMiddleware, (req, res) => {
+router.patch('/:taskId/status', flexAuth, (req, res) => {
   try {
     const { status } = req.body;
 
@@ -83,7 +97,6 @@ router.patch('/:taskId/status', authMiddleware, (req, res) => {
       return res.status(400).json({ error: 'Status is required' });
     }
 
-    const validStatuses = ['backlog', 'todo', 'in-progress', 'testing', 'done'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ 
         error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
@@ -102,7 +115,9 @@ router.patch('/:taskId/status', authMiddleware, (req, res) => {
       'backlog': 'moved to backlog',
       'todo': 'moved to todo',
       'in-progress': 'started working on',
+      'testing': 'moved to testing',
       'done': 'completed',
+      'archived': 'archived',
     };
 
     createEvent({
@@ -131,7 +146,7 @@ router.patch('/:taskId/status', authMiddleware, (req, res) => {
  * POST /api/agent-tasks/:taskId/comment
  * Add comment to task (simplified for agents)
  */
-router.post('/:taskId/comment', authMiddleware, (req, res) => {
+router.post('/:taskId/comment', flexAuth, (req, res) => {
   try {
     const { content } = req.body;
 
@@ -194,7 +209,7 @@ router.post('/:taskId/comment', authMiddleware, (req, res) => {
  * PATCH /api/agent-tasks/:taskId
  * Update task (full update for agents)
  */
-router.patch('/:taskId', authMiddleware, (req, res) => {
+router.patch('/:taskId', flexAuth, (req, res) => {
   try {
     const task = getTaskById(req.params.taskId);
     if (!task) {
@@ -202,7 +217,14 @@ router.patch('/:taskId', authMiddleware, (req, res) => {
     }
 
     const updates = {};
-    if (req.body.status) updates.status = req.body.status;
+    if (req.body.status) {
+      if (!validStatuses.includes(req.body.status)) {
+        return res.status(400).json({
+          error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        });
+      }
+      updates.status = req.body.status;
+    }
     if (req.body.priority) updates.priority = req.body.priority;
     if (req.body.description !== undefined) updates.description = req.body.description;
 

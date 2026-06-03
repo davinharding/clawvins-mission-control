@@ -10,24 +10,27 @@ pkill -f "vite.js" 2>/dev/null
 pkill -f "pnpm run dev" 2>/dev/null
 sleep 2
 
+NODE_BIN="/usr/local/bin/node"
+NPM_BIN="/usr/local/bin/npm"
+
 echo "🔨 Checking better-sqlite3 binding..."
-BINDING=$(node -e "require('better-sqlite3'); console.log('ok')" 2>/dev/null || echo "fail")
+BINDING=$("$NODE_BIN" -e "require('better-sqlite3'); console.log('ok')" 2>/dev/null || echo "fail")
 if [ "$BINDING" != "ok" ]; then
   echo "⚙️  Rebuilding better-sqlite3..."
   cd /home/node/.openclaw/code/mission-control
-  npx node-gyp rebuild --directory node_modules/.pnpm/better-sqlite3@12.6.2/node_modules/better-sqlite3 2>/dev/null || true
+  "$NPM_BIN" rebuild better-sqlite3
 fi
 
 echo "🚀 Starting backend..."
 cd /home/node/.openclaw/code/mission-control
-node server/index.js > /tmp/mc-backend.log 2>&1 &
+"$NODE_BIN" server/index.js > /tmp/mc-backend.log 2>&1 &
 BACKEND_PID=$!
 echo "  Backend PID: $BACKEND_PID"
 
 sleep 3
 
 echo "🌐 Starting file server..."
-node /home/node/.openclaw/workspace/.fileserver/server.js > /tmp/mc-fileserver.log 2>&1 &
+"$NODE_BIN" /home/node/.openclaw/workspace/.fileserver/server.js > /tmp/mc-fileserver.log 2>&1 &
 FS_PID=$!
 echo "  File server PID: $FS_PID"
 

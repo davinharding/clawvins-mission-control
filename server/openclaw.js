@@ -155,11 +155,13 @@ export async function getSessions() {
 }
 
 function getFallbackAgents() {
-  // Real agents from OpenClaw sessions_list (9 total):
+  // Real agents from OpenClaw sessions_list:
   // Patch (coder), Clawvin, Alpha, Nova, Scout (stagesnap-business), 
-  // Health (health-tracking), Atlas (training), Iris (outreach), Ledger (finance)
+  // Health (health-tracking), Atlas (training), Iris (outreach), Ledger (finance),
+  // Cypress (qa)
   return [
     { key: 'coder', name: 'Patch', role: 'Dev', status: 'online' },
+    { key: 'qa', name: 'Cypress', role: 'QA', status: 'online' },
     { key: 'clawvin', name: 'Clawvin', role: 'Main', status: 'online' },
     { key: 'alpha', name: 'Alpha', role: 'Research', status: 'online' },
     { key: 'nova', name: 'Nova', role: 'Research', status: 'online' },
@@ -179,6 +181,7 @@ export async function getAgentsFromSessions() {
     // Fallback data from getFallbackAgents() has 'key' not full session data
     const agentIdMap = {
       'coder': 'agent-patch',
+      'qa': 'agent-cypress',
       'clawvin': 'agent-clawvin',
       'alpha': 'agent-alpha',
       'nova': 'agent-nova',

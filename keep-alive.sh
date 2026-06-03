@@ -6,6 +6,7 @@ LOG="/tmp/mc-server.log"
 PID_BACKEND="/tmp/mc-backend.pid"
 PID_FRONTEND="/tmp/mc-frontend.pid"
 PID_WATCHER="/tmp/mc-watcher.pid"
+NODE_BIN="/usr/local/bin/node"
 
 is_running() {
   local pidfile="$1"
@@ -22,7 +23,7 @@ while true; do
         [ -f "$PID_BACKEND" ] && kill "$(cat "$PID_BACKEND")" 2>/dev/null && sleep 1
         echo "$(date): MC backend starting..." >> "$LOG"
         cd "$MC_DIR"
-        nohup node server/index.js >> "$LOG" 2>&1 &
+        nohup "$NODE_BIN" server/index.js >> "$LOG" 2>&1 &
         echo $! > "$PID_BACKEND"
         echo "$(date): MC backend started (PID: $!)" >> "$LOG"
         sleep 3
@@ -46,7 +47,7 @@ while true; do
     if ! is_running "$PID_WATCHER"; then
         echo "$(date): MC watcher starting..." >> "$LOG"
         cd "$MC_DIR"
-        nohup node scripts/watch-sessions.js >> /tmp/mc-watcher.log 2>&1 &
+        nohup "$NODE_BIN" scripts/watch-sessions.js >> /tmp/mc-watcher.log 2>&1 &
         echo $! > "$PID_WATCHER"
         echo "$(date): MC watcher started (PID: $!)" >> "$LOG"
     fi

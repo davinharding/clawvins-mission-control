@@ -1033,6 +1033,113 @@ export default function HomePage() {
     [tasks, activeTaskId]
   );
 
+  const agentFiltersPanel = (
+    <>
+      <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
+        <div className="flex-shrink-0 space-y-3 p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+            Agent Filters
+          </p>
+          <Tabs
+            value={selectedRole}
+            onValueChange={(v) => {
+              setSelectedRole(v as AgentRole | "All");
+              setSelectedAgentId(null);
+            }}
+            options={roles}
+          />
+          <div className="flex items-center justify-between text-xs font-semibold uppercase text-muted-foreground">
+            <span>Agents</span>
+            <button
+              type="button"
+              onClick={() => setSelectedAgentId(null)}
+              className="text-primary"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 pb-6" data-testid="agent-list">
+          <div className="space-y-2">
+            {visibleAgents.map((agent) => (
+              <button
+                key={agent.id}
+                type="button"
+                onClick={() => setSelectedAgentId(agent.id)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+                  selectedAgentId === agent.id
+                    ? "border-primary/60 bg-primary/10"
+                    : "border-border/70 hover:bg-muted/60"
+                )}
+              >
+                {(() => {
+                  const emoji = getAgentEmoji(agent.name);
+                  return (
+                    <Avatar className={cn(
+                      "ring-2",
+                      statusRing[agent.status],
+                      roleAvatarBg[agent.role]
+                    )}>
+                      <AvatarFallback className={emoji ? "text-base" : roleAvatarText[agent.role]}>
+                        {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                  );
+                })()}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{agent.name}</span>
+                    {(() => {
+                      const activeCount = taskCountByAgent.get(agent.id) ?? 0;
+                      if (activeCount <= 0) return null;
+                      return (
+                        <span className="ml-auto rounded-full bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                          {activeCount}
+                        </span>
+                      );
+                    })()}
+                    <span
+                      className={cn(
+                        "h-2.5 w-2.5 rounded-full",
+                        statusColor[agent.status],
+                        (taskCountByAgent.get(agent.id) ?? 0) > 0 ? "" : "ml-auto"
+                      )}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{agent.role}</p>
+                </div>
+              </button>
+            ))}
+            {!visibleAgents.length && (
+              <p className="text-xs text-muted-foreground">No agents online yet.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-shrink-0 rounded-xl border bg-card p-6" data-testid="status-legend">
+        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+          Status Legend
+        </p>
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+            Online
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+            Busy
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+            Offline
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
   if (showLogin) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-background">
@@ -1322,6 +1429,26 @@ export default function HomePage() {
                 />
                 <button
                   type="button"
+                  onClick={() => setShowMobileFilters((v) => !v)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60 2xl:hidden",
+                    showMobileFilters ? "bg-muted/60" : ""
+                  )}
+                >
+                  Filters {showMobileFilters ? "▲" : "▼"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEventFeed((v) => !v)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60 2xl:hidden",
+                    showEventFeed ? "bg-muted/60" : ""
+                  )}
+                >
+                  Feed {showEventFeed ? "▲" : "▼"}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowStats((v) => !v)}
                   className="flex items-center gap-1 rounded-lg border border-border/70 px-3 min-h-[44px] text-xs font-semibold transition hover:bg-muted/60"
                 >
@@ -1369,7 +1496,7 @@ export default function HomePage() {
         {/* Mobile event feed overlay */}
         {showEventFeed && (
           <div
-            className="fixed inset-0 z-40 lg:hidden flex flex-col bg-card/98 backdrop-blur"
+            className="fixed inset-0 z-40 2xl:hidden flex flex-col bg-card/98 backdrop-blur"
             style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
             <ErrorBoundary>
@@ -1387,115 +1514,33 @@ export default function HomePage() {
           </div>
         )}
 
-        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-4 sm:gap-6 px-2 sm:px-6 py-2 sm:py-6 lg:grid-cols-[240px_1fr_360px]">
+        <div className="grid flex-1 min-h-0 grid-rows-1 grid-cols-1 gap-4 sm:gap-6 px-2 sm:px-6 py-2 sm:py-6 2xl:grid-cols-[240px_1fr_360px]">
           {/* LEFT SIDEBAR - Agent Filters + Status Legend (desktop only) */}
-          <aside className="hidden lg:flex h-full min-h-0 flex-col gap-6">
-            {/* Agent Filters Card - flex-1 to take available space, overflow hidden */}
-            <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
-              <div className="flex-shrink-0 space-y-3 p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-                  Agent Filters
-                </p>
-                <Tabs
-                  value={selectedRole}
-                  onValueChange={(v) => {
-                    setSelectedRole(v as AgentRole | "All");
-                    setSelectedAgentId(null); // clear per-agent filter when switching category
-                  }}
-                  options={roles}
-                />
-                <div className="flex items-center justify-between text-xs font-semibold uppercase text-muted-foreground">
-                  <span>Agents</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAgentId(null)}
-                    className="text-primary"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-              {/* Agent List - scrollable with native overflow */}
-              <div className="flex-1 overflow-y-auto px-6 pb-6" data-testid="agent-list">
-                <div className="space-y-2">
-                  {visibleAgents.map((agent) => (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      onClick={() => setSelectedAgentId(agent.id)}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
-                        selectedAgentId === agent.id
-                          ? "border-primary/60 bg-primary/10"
-                          : "border-border/70 hover:bg-muted/60"
-                      )}
-                    >
-                      {(() => {
-                        const emoji = getAgentEmoji(agent.name);
-                        return (
-                          <Avatar className={cn(
-                            "ring-2",
-                            statusRing[agent.status],
-                            roleAvatarBg[agent.role]
-                          )}>
-                            <AvatarFallback className={emoji ? "text-base" : roleAvatarText[agent.role]}>
-                              {emoji ?? agent.name.split(" ").map((p) => p[0]).join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                        );
-                      })()}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold">{agent.name}</span>
-                          {(() => {
-                            const activeCount = taskCountByAgent.get(agent.id) ?? 0;
-                            if (activeCount <= 0) return null;
-                            return (
-                              <span className="ml-auto rounded-full bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                                {activeCount}
-                              </span>
-                            );
-                          })()}
-                          <span
-                            className={cn(
-                              "h-2.5 w-2.5 rounded-full",
-                              statusColor[agent.status],
-                              (taskCountByAgent.get(agent.id) ?? 0) > 0 ? "" : "ml-auto"
-                            )}
-                          />
-                        </div>
-                        <p className="text-xs text-muted-foreground">{agent.role}</p>
-                      </div>
-                    </button>
-                  ))}
-                  {!visibleAgents.length && (
-                    <p className="text-xs text-muted-foreground">No agents online yet.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Status Legend - flex-shrink-0 to prevent shrinking, always visible */}
-            <div className="flex-shrink-0 rounded-xl border bg-card p-6" data-testid="status-legend">
-              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-                Status Legend
-              </p>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  Online
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                  Busy
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-                  Offline
-                </div>
-              </div>
-            </div>
+          <aside className="hidden 2xl:flex h-full min-h-0 flex-col gap-6">
+            {agentFiltersPanel}
           </aside>
+
+          {showMobileFilters && (
+            <div className="hidden lg:grid 2xl:hidden grid-cols-[minmax(260px,360px)_1fr] gap-4">
+              <div className="flex min-h-[320px] flex-col gap-4">
+                {agentFiltersPanel}
+              </div>
+              <div className="rounded-xl border bg-card p-4">
+                <TaskSearchBar
+                  query={searchQuery}
+                  onQueryChange={handleSearchQueryChange}
+                  tags={availableTags}
+                  selectedTags={selectedTags}
+                  onToggleTag={handleToggleTag}
+                  selectedPriorities={selectedPriorities}
+                  onTogglePriority={handleTogglePriority}
+                  onClear={handleClearTaskFilters}
+                  filteredCount={filteredTasks.length}
+                  totalCount={baseFilteredTasks.length}
+                />
+              </div>
+            </div>
+          )}
 
           {/* CENTER - Kanban Board or Cost Dashboard */}
           <section className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
@@ -1772,8 +1817,8 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* RIGHT SIDEBAR - Event Feed (desktop only; mobile uses overlay) */}
-          <aside className="hidden lg:flex h-full min-h-0 flex-col">
+          {/* RIGHT SIDEBAR - Event Feed (wide desktop only; smaller layouts use overlay) */}
+          <aside className="hidden 2xl:flex h-full min-h-0 flex-col">
             <ErrorBoundary>
               <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-card">
                 <EventFeed

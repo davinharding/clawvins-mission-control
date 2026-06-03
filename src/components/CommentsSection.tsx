@@ -32,14 +32,14 @@ export function CommentsSection({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="min-w-0 space-y-4 overflow-x-hidden">
+      <div className="flex min-w-0 items-center justify-between">
         <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           Comments
         </h4>
         <span className="text-xs text-muted-foreground">{comments.length}</span>
       </div>
-      <div className="space-y-3">
+      <div className="min-w-0 space-y-3">
         {loading && (
           <p className="text-sm text-muted-foreground">Loading comments...</p>
         )}
@@ -49,7 +49,7 @@ export function CommentsSection({
         {!loading &&
           comments.map((comment) => <CommentItem key={comment.id} comment={comment} />)}
       </div>
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         <Textarea
           value={text}
           onChange={(event) => onDraftChange(event.target.value)}
@@ -57,7 +57,7 @@ export function CommentsSection({
           maxLength={1000}
           disabled={posting}
         />
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>{text.length}/1000</span>
           <Button onClick={handleSubmit} disabled={posting || !text.trim()}>
             {posting ? "Posting..." : "Post"}

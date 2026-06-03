@@ -242,7 +242,7 @@ export function TaskEditModal({
       <DialogContent>
         <DialogHeader>
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <DialogTitle>Edit Task</DialogTitle>
               <DialogDescription>Update task details and collaborate in real-time.</DialogDescription>
             </div>
@@ -258,8 +258,8 @@ export function TaskEditModal({
         </DialogHeader>
 
         {/* Scrollable body — grows to fill, scrolls independently of footer */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Title
@@ -292,7 +292,7 @@ export function TaskEditModal({
                 className="w-full rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-left text-sm leading-relaxed hover:bg-muted/30 transition"
               >
                 <div
-                  className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground [&_a]:break-words"
+                  className="prose prose-sm min-w-0 max-w-none text-sm leading-relaxed text-foreground [overflow-wrap:anywhere] [&_a]:break-all [&_code]:break-words [&_code]:[overflow-wrap:anywhere] [&_li]:break-words [&_li]:[overflow-wrap:anywhere] [&_p]:break-words [&_p]:[overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:overflow-x-hidden [&_pre]:[overflow-wrap:anywhere]"
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(description) }}
                 />
               </button>
@@ -396,7 +396,7 @@ export function TaskEditModal({
         )}
         </div>{/* end scrollable body */}
 
-        <DialogFooter>
+        <DialogFooter className="max-sm:grid max-sm:grid-cols-2 max-sm:gap-2 max-sm:[&>button]:w-full max-sm:[&>button]:justify-center">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
             Cancel
           </Button>

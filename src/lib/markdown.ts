@@ -24,7 +24,7 @@ export const renderMarkdown = (text: string) => {
   const codeBlocks: string[] = [];
   const withoutBlocks = escaped.replace(/```([\s\S]*?)```/g, (_match, code) => {
     const normalized = code.replace(/^\n/, "").replace(/\n$/, "");
-    const html = `<pre class=\"bg-muted/40 font-mono text-xs sm:text-sm leading-relaxed rounded-md p-3 overflow-x-auto\"><code>${normalized}</code></pre>`;
+    const html = `<pre class=\"bg-muted/40 font-mono text-xs sm:text-sm leading-relaxed rounded-md p-3 overflow-x-hidden whitespace-pre-wrap break-words\"><code class=\"break-words\">${normalized}</code></pre>`;
     const token = `__CODE_BLOCK_${codeBlocks.length}__`;
     codeBlocks.push(html);
     return `\n${token}\n`;
@@ -33,7 +33,7 @@ export const renderMarkdown = (text: string) => {
   const inlineCodes: string[] = [];
   const applyInline = (input: string) => {
     const withInline = input.replace(/`([^`]+?)`/g, (_match, code) => {
-      const html = `<code class=\"bg-muted/40 font-mono text-xs px-1 py-0.5 rounded\">${code}</code>`;
+      const html = `<code class=\"bg-muted/40 font-mono text-xs px-1 py-0.5 rounded break-words\">${code}</code>`;
       const token = `__INLINE_CODE_${inlineCodes.length}__`;
       inlineCodes.push(html);
       return token;
@@ -49,7 +49,7 @@ export const renderMarkdown = (text: string) => {
 
   const flushParagraph = () => {
     if (!paragraph.length) return;
-    blocks.push(`<p class=\"text-sm leading-relaxed\">${applyInline(paragraph.join("<br />"))}</p>`);
+    blocks.push(`<p class=\"text-sm leading-relaxed break-words\">${applyInline(paragraph.join("<br />"))}</p>`);
     paragraph = [];
   };
 

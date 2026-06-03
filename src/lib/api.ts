@@ -360,22 +360,13 @@ export async function searchTasks(query: string, limit = 20): Promise<{ results:
 }
 
 // Author is determined server-side from the auth token.
-// Agents can send x-agent-id and x-agent-name headers for identity.
-// Use setAgentIdentity() to set the agent's identity before making API calls.
+// Browser code must not carry agent API keys; agents should call server APIs directly.
 export async function createComment(taskId: string, text: string) {
-  const agentIdentity = getAgentIdentity();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...authHeaders(),
   };
-  
-  // Add agent identity headers if set - this enables agent attribution in comments
-  if (agentIdentity) {
-    headers['x-agent-key'] = 'mc-agent-2026-z3x6c9v2b5n8m1k4';
-    headers['x-agent-id'] = agentIdentity.agentId;
-    headers['x-agent-name'] = agentIdentity.agentName;
-  }
-  
+
   return request<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
     method: 'POST',
     headers,

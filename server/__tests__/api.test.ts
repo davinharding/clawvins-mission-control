@@ -8,12 +8,14 @@ const state = {
   tasks: [] as any[],
   agents: [] as any[],
   events: [] as any[],
+  comments: [] as any[],
 };
 
 const resetState = () => {
   state.tasks = [];
   state.agents = [];
   state.events = [];
+  state.comments = [];
 };
 
 vi.mock('../db.js', () => {
@@ -95,6 +97,21 @@ vi.mock('../db.js', () => {
       state.tasks = state.tasks.filter((task) => task.id !== id);
       return before !== state.tasks.length;
     },
+    getCommentsByTask: (taskId: string) => state.comments.filter((comment) => comment.task_id === taskId),
+    createComment: (data: any) => {
+      const comment = {
+        id: makeId('comment'),
+        task_id: data.taskId,
+        author_id: data.authorId,
+        author_name: data.authorName,
+        text: data.text,
+        created_at: now(),
+      };
+      state.comments.push(comment);
+      const task = state.tasks.find((t) => t.id === data.taskId);
+      if (task) task.comment_count = (task.comment_count ?? 0) + 1;
+      return comment;
+    },
     getAllAgents: () => state.agents,
     getAgentById: (id: string) => state.agents.find((agent) => agent.id === id) ?? null,
     createAgent: (data: any) => {
@@ -165,8 +182,8 @@ const getAuthHeader = () => {
   return { Authorization: `Bearer ${token}` };
 };
 
-const getAgentAuthHeader = (agentId = 'agent-patch', agentName = 'Patch') => ({
-  'x-api-key': 'test-agent-key',
+const getAgentAuthHeader = (agentId = 'agent-patch', agentName = 'Patch', key = 'test-patch-key') => ({
+  'x-api-key': key,
   'x-agent-id': agentId,
   'x-agent-name': agentName,
 });
@@ -174,6 +191,10 @@ const getAgentAuthHeader = (agentId = 'agent-patch', agentName = 'Patch') => ({
 beforeAll(async () => {
   process.env.JWT_SECRET = 'test-secret';
   process.env.AGENT_API_KEY = 'test-agent-key';
+  process.env.AGENT_API_KEYS = JSON.stringify({
+    'test-patch-key': { id: 'agent-patch', name: 'Patch', role: 'Dev' },
+    'test-nova-key': { id: 'agent-nova', name: 'Nova', role: 'Research' },
+  });
 
   const authModule = await import('../auth.js');
   authMiddleware = authModule.authMiddleware;
@@ -337,6 +358,78 @@ describe('Agent task endpoints', () => {
 
     expect(archivedResponse.status).toBe(200);
     expect(archived.task.status).toBe('archived');
+  });
+
+  it('attributes agent comments from the API key mapping', async () => {
+    const task = createTask({
+      title: 'Comment task',
+      status: 'todo',
+      assignedAgent: 'agent-patch',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+
+    const response = await fetch(`${baseUrl}/api/agent-tasks/${task.id}/comment`, {
+      method: 'POST',
+      headers: {
+        ...getAgentAuthHeader('agent-patch', 'Spoofed Display Name'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content: 'Working on this.' }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.comment.authorId).toBe('agent-patch');
+    expect(data.comment.authorName).toBe('Patch');
+  });
+
+  it('rejects agent API key spoofing with a mismatched x-agent-id', async () => {
+    const task = createTask({
+      title: 'Spoof target',
+      status: 'todo',
+      assignedAgent: 'agent-patch',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+
+    const response = await fetch(`${baseUrl}/api/agent-tasks/${task.id}/comment`, {
+      method: 'POST',
+      headers: {
+        ...getAgentAuthHeader('agent-nova', 'Nova', 'test-patch-key'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content: 'Pretending to be Nova.' }),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('keeps JWT attribution for human task comments', async () => {
+    const task = createTask({
+      title: 'Human comment task',
+      status: 'todo',
+      assignedAgent: 'agent-patch',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+
+    const response = await fetch(`${baseUrl}/api/tasks/${task.id}/comments`, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: 'Human comment.' }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.comment.authorId).toBe('user-1');
+    expect(data.comment.authorName).toBe('Tester');
   });
 });
 

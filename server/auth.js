@@ -41,18 +41,55 @@ function authMiddleware(req, res, next) {
   next();
 }
 
+function parseAgentKeyMap() {
+  if (!process.env.AGENT_API_KEYS) return {};
+  try {
+    const parsed = JSON.parse(process.env.AGENT_API_KEYS);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function getAgentForKey(key) {
+  const perAgentKeys = parseAgentKeyMap();
+  const configuredAgent = perAgentKeys[key];
+  if (configuredAgent?.id && configuredAgent?.name) {
+    return {
+      id: configuredAgent.id,
+      name: configuredAgent.name,
+      role: configuredAgent.role || 'Dev',
+    };
+  }
+
+  const legacyKey = process.env.AGENT_API_KEY;
+  if (legacyKey && key === legacyKey) {
+    return {
+      id: process.env.AGENT_API_KEY_AGENT_ID || 'agent-patch',
+      name: process.env.AGENT_API_KEY_AGENT_NAME || 'Patch',
+      role: process.env.AGENT_API_KEY_AGENT_ROLE || 'Dev',
+    };
+  }
+
+  return null;
+}
+
 function agentKeyMiddleware(req, res, next) {
-  // Read lazily so dotenv.config() has already run
-  const AGENT_API_KEY = process.env.AGENT_API_KEY || 'mc-agent-key-change-me';
   const key = req.headers['x-api-key'] || req.headers['x-agent-key'];
-  if (key === AGENT_API_KEY) {
-    // Identify agent from optional headers
-    const agentName = req.headers['x-agent-name'] || 'Agent';
-    const agentId = req.headers['x-agent-id'] || 'agent-unknown';
-    req.user = { id: agentId, name: agentName, role: 'Dev' };
+  const agent = getAgentForKey(key);
+
+  if (agent) {
+    const requestedAgentId = req.headers['x-agent-id'];
+    if (requestedAgentId && requestedAgentId !== agent.id) {
+      return res.status(403).json({ error: 'Agent API key does not match requested agent identity' });
+    }
+
+    req.user = agent;
+    req.agent = agent;
     return next();
   }
   next(); // Fall through to JWT middleware
 }
 
-export { generateToken, verifyToken, authMiddleware, agentKeyMiddleware };
+export { generateToken, verifyToken, authMiddleware, agentKeyMiddleware, getAgentForKey };

@@ -196,7 +196,7 @@ console.log('Session monitor initialized');
 // Start session watcher (pure Node.js, no agent calls)
 import { spawn } from 'node:child_process';
 const watcherPath = new URL('../scripts/watch-sessions.js', import.meta.url).pathname;
-const watcher = spawn('node', [watcherPath], {
+const watcher = spawn(process.execPath, [watcherPath], {
   stdio: 'inherit',
   env: {
     ...process.env,

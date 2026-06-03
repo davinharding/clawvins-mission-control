@@ -256,6 +256,28 @@ describe('API endpoints', () => {
     expect(patched.task.status).toBe('testing');
   });
 
+  it('rejects mobile overflow verification fixtures as live tasks', async () => {
+    const response = await fetch(`${baseUrl}/api/tasks`, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Mobile overflow screenshot 1780449052958',
+        status: 'todo',
+        priority: 'medium',
+        tags: ['mobile', 'overflow'],
+        description:
+          'Description with inline path `/home/node/.openclaw/workspace-coder/some/really/deep/path/task-bb0e6000-d69e-4428-ab56-42dd93f97831/abcdefghijklmnopqrstuvwxyz0123456789/index.tsx`.',
+      }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(body)).toContain('Verification fixtures');
+  });
+
   it('GET /api/agents', async () => {
     createAgent({
       id: 'agent-1',

@@ -5,6 +5,24 @@ const agentRole = z.enum(['Main', 'Dev', 'Research', 'Ops']);
 const agentStatus = z.enum(['online', 'offline', 'busy']);
 const taskPriority = z.enum(['low', 'medium', 'high', 'critical']);
 
+const isFixtureTask = ({ title = '', description = '', tags = [] }) => {
+  const normalizedTitle = title.toLowerCase();
+  const normalizedDescription = (description || '').toLowerCase();
+  const normalizedTags = tags.map((tag) => String(tag).toLowerCase());
+
+  const hasMobileOverflowTitle =
+    normalizedTitle.startsWith('mobile overflow verification') ||
+    normalizedTitle.startsWith('mobile overflow screenshot');
+  const hasMobileOverflowTags =
+    normalizedTags.includes('mobile') && normalizedTags.includes('overflow');
+  const hasSyntheticWorkspaceCoderPath =
+    normalizedDescription.includes('/workspace-coder/') &&
+    normalizedDescription.includes('/task-') &&
+    normalizedDescription.includes('abcdefghijklmnopqrstuvwxyz0123456789');
+
+  return (hasMobileOverflowTitle && hasMobileOverflowTags) || hasSyntheticWorkspaceCoderPath;
+};
+
 const schemas = {
   login: z.object({
     username: z.string().min(1),
@@ -17,6 +35,8 @@ const schemas = {
     assignedAgent: z.string().optional(),
     priority: taskPriority.optional(),
     tags: z.array(z.string()).optional(),
+  }).refine((data) => !isFixtureTask(data), {
+    message: 'Verification fixtures must not be created as live Mission Control tasks',
   }),
   taskUpdate: z
     .object({

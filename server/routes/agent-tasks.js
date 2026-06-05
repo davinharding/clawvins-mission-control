@@ -7,6 +7,7 @@ import express from 'express';
 import {
   getAllTasks,
   getTaskById,
+  getCommentsByTask,
   updateTask,
   createComment,
   createEvent,
@@ -16,6 +17,7 @@ import { authMiddleware, agentKeyMiddleware } from '../auth.js';
 const router = express.Router();
 
 const validStatuses = ['backlog', 'todo', 'in-progress', 'testing', 'done', 'archived'];
+const commentRequiredStatuses = new Set(['testing', 'done']);
 
 const flexAuth = (req, res, next) => {
   const key = req.headers['x-api-key'] || req.headers['x-agent-key'];
@@ -44,6 +46,26 @@ const formatTask = (task) => ({
   createdBy: task.created_by,
   tags: JSON.parse(task.tags || '[]'),
 });
+
+const hasAgentComment = (taskId, agentId) => {
+  return getCommentsByTask(taskId).some((comment) => comment.author_id === agentId);
+};
+
+const enforceAgentCompletionComment = (req, res, taskId, status) => {
+  if (!req.agent || !commentRequiredStatuses.has(status)) {
+    return false;
+  }
+
+  if (hasAgentComment(taskId, req.user.id)) {
+    return false;
+  }
+
+  res.status(409).json({
+    error: 'Agent comment required before moving task to testing or done',
+    message: 'Add a task comment with the work performed, verification, blocker, or handoff before completing this status change.',
+  });
+  return true;
+};
 
 /**
  * GET /api/agent-tasks/mine
@@ -106,6 +128,10 @@ router.patch('/:taskId/status', flexAuth, (req, res) => {
     const oldTask = getTaskById(req.params.taskId);
     if (!oldTask) {
       return res.status(404).json({ error: 'Task not found' });
+    }
+
+    if (enforceAgentCompletionComment(req, res, req.params.taskId, status)) {
+      return;
     }
 
     const task = updateTask(req.params.taskId, { status });
@@ -227,6 +253,10 @@ router.patch('/:taskId', flexAuth, (req, res) => {
     }
     if (req.body.priority) updates.priority = req.body.priority;
     if (req.body.description !== undefined) updates.description = req.body.description;
+
+    if (updates.status && enforceAgentCompletionComment(req, res, req.params.taskId, updates.status)) {
+      return;
+    }
 
     const updatedTask = updateTask(req.params.taskId, updates);
 

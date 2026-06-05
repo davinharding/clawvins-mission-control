@@ -30,6 +30,19 @@ curl -H "Authorization: Bearer $MISSION_CONTROL_TOKEN" \
 
 ## Task Endpoints
 
+## Agent Task Comment Requirement
+
+Agents must leave visible task comments when starting work, after meaningful progress, when blocked, and on completion or handoff. Mission Control enforces this for agent-key status changes: before an agent moves a task to `testing` or `done`, that agent must have already posted at least one comment on the task. Human JWT updates are not blocked by this guardrail.
+
+Add a task comment:
+
+```bash
+curl -X POST "$MISSION_CONTROL_URL/api/agent-tasks/task-123/comment" \
+  -H "x-api-key: $MISSION_CONTROL_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Implemented the fix, ran npm test, handing off to testing."}'
+```
+
 Create a task:
 
 ```bash
@@ -121,4 +134,5 @@ mission_control({
 The wrapper should:
 - Read `MISSION_CONTROL_URL` and `MISSION_CONTROL_TOKEN` from the environment.
 - Map actions to REST endpoints.
+- Require or prompt for a task comment before agent handoff to `testing` or `done`.
 - Return parsed JSON responses to the calling agent.

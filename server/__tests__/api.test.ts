@@ -345,7 +345,32 @@ describe('Agent task endpoints', () => {
     expect(data.tasks[0].assignedAgent).toBe('agent-patch');
   });
 
-  it('allows agents to move tasks through testing and archived statuses', async () => {
+  it('requires an agent-authored comment before agent handoff to testing', async () => {
+    const task = createTask({
+      title: 'Needs comment before testing',
+      status: 'todo',
+      assignedAgent: 'agent-patch',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+
+    const response = await fetch(`${baseUrl}/api/agent-tasks/${task.id}/status`, {
+      method: 'PATCH',
+      headers: {
+        ...getAgentAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: 'testing' }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.error).toContain('Agent comment required');
+    expect(getTaskById(task.id).status).toBe('todo');
+  });
+
+  it('allows agents to move tasks through testing and archived statuses after commenting', async () => {
     const task = createTask({
       title: 'Lifecycle task',
       status: 'todo',
@@ -353,6 +378,15 @@ describe('Agent task endpoints', () => {
       priority: 'medium',
       tags: [],
       createdBy: 'user-1',
+    });
+
+    await fetch(`${baseUrl}/api/agent-tasks/${task.id}/comment`, {
+      method: 'POST',
+      headers: {
+        ...getAgentAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content: 'Starting work and will hand off after verification.' }),
     });
 
     const testingResponse = await fetch(`${baseUrl}/api/agent-tasks/${task.id}/status`, {
@@ -380,6 +414,53 @@ describe('Agent task endpoints', () => {
 
     expect(archivedResponse.status).toBe(200);
     expect(archived.task.status).toBe('archived');
+  });
+
+  it('requires an agent-authored comment before agent full-update completion', async () => {
+    const task = createTask({
+      title: 'Needs comment before done',
+      status: 'in-progress',
+      assignedAgent: 'agent-patch',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+
+    const response = await fetch(`${baseUrl}/api/agent-tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: {
+        ...getAgentAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: 'done' }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(getTaskById(task.id).status).toBe('in-progress');
+  });
+
+  it('does not require comments for human JWT updates through agent task endpoints', async () => {
+    const task = createTask({
+      title: 'Human status move',
+      status: 'todo',
+      assignedAgent: 'agent-patch',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user-1',
+    });
+
+    const response = await fetch(`${baseUrl}/api/agent-tasks/${task.id}/status`, {
+      method: 'PATCH',
+      headers: {
+        ...getAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: 'testing' }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.task.status).toBe('testing');
   });
 
   it('attributes agent comments from the API key mapping', async () => {

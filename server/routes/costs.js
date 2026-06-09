@@ -1,5 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
+import { classifyCostRecord, detectProviderSubscriptions, sanitizeInteger, sanitizeNumber } from '../lib/cost-classification.js';
 
 const router = express.Router();
 
@@ -23,17 +24,15 @@ router.get('/', (req, res) => {
     const weekStart = now - (7 * 24 * 60 * 60 * 1000);
     const monthStart = now - (30 * 24 * 60 * 60 * 1000);
 
-    const baseCte = `
-      WITH base AS (
+    const baseQuery = `
         SELECT
           id,
           COALESCE(agent_id, 'unknown') AS agent_id,
           timestamp,
-          COALESCE(source, 'openclaw-router') AS source,
-          CAST(json_extract(detail, '$.cost') AS REAL) AS cost,
-          CAST(COALESCE(json_extract(detail, '$.tokens'), 0) AS INTEGER) AS tokens,
+          COALESCE(json_extract(detail, '$.source'), source, 'openclaw-router') AS source,
+          json_extract(detail, '$.cost') AS cost,
+          COALESCE(json_extract(detail, '$.tokens'), 0) AS tokens,
           COALESCE(json_extract(detail, '$.model'), 'unknown') AS model,
-          LOWER(COALESCE(json_extract(detail, '$.model'), '')) AS model_lower,
           CASE ?
             WHEN 'hour' THEN CAST(strftime('%s', datetime(timestamp / 1000, 'unixepoch', 'localtime', 'start of hour', 'utc')) AS INTEGER) * 1000
             WHEN 'day' THEN CAST(strftime('%s', datetime(timestamp / 1000, 'unixepoch', 'localtime', 'start of day', 'utc')) AS INTEGER) * 1000
@@ -47,186 +46,70 @@ router.get('/', (req, res) => {
           AND timestamp >= ?
           AND timestamp <= ?
           AND json_extract(detail, '$.cost') IS NOT NULL
-      ),
-      normalized AS (
-        SELECT
-          id,
-          agent_id,
-          timestamp,
-          source,
-          cost,
-          tokens,
-          model,
-          bucket_key,
-          CASE
-            WHEN model_lower LIKE '%claude%' OR model_lower LIKE '%anthropic%' OR model_lower LIKE '%sonnet%' OR model_lower LIKE '%opus%' OR model_lower LIKE '%haiku%'
-            THEN 1
-            ELSE 0
-          END AS is_anthropic,
-          CASE
-            WHEN model_lower LIKE '%claude%' OR model_lower LIKE '%anthropic%' OR model_lower LIKE '%sonnet%' OR model_lower LIKE '%opus%' OR model_lower LIKE '%haiku%'
-            THEN 'Anthropic (Max Plan)'
-            WHEN model_lower LIKE '%gpt%' OR model_lower LIKE '%openai%'
-            THEN 'OpenAI'
-            WHEN model_lower LIKE '%deepseek%'
-            THEN 'DeepSeek'
-            WHEN model_lower LIKE '%gemini%' OR model_lower LIKE '%google%'
-            THEN 'Google'
-            WHEN model_lower LIKE '%llama%' OR model_lower LIKE '%meta%'
-            THEN 'Meta'
-            WHEN model_lower LIKE '%mistral%'
-            THEN 'Mistral'
-            WHEN model_lower LIKE '%cohere%'
-            THEN 'Cohere'
-            WHEN model_lower LIKE '%openrouter%'
-            THEN 'OpenRouter'
-            ELSE model
-          END AS provider
-        FROM base
-      ),
-      deduped AS (
-        SELECT *
-        FROM normalized n
-        WHERE NOT (
-          n.source = 'openai-usage-api'
-          AND EXISTS (
-            SELECT 1 FROM normalized r
-            WHERE r.source = 'openclaw-router'
-              AND r.model = n.model
-              AND r.bucket_key = n.bucket_key
-          )
-        )
-      )
+        ORDER BY timestamp DESC
     `;
 
-    const summary = db.prepare(`
-      ${baseCte}
-      SELECT
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS totalBilledCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS totalAnthropicCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN tokens ELSE 0 END), 0) AS totalAnthropicTokens,
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS todayBilledCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS weekBilledCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS monthBilledCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS todayAnthropicCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS weekAnthropicCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 AND timestamp >= ? THEN cost ELSE 0 END), 0) AS monthAnthropicCost
-      FROM deduped
-    `).get(period, fromTs, toTs, todayStart, weekStart, monthStart, todayStart, weekStart, monthStart);
+    const rawRows = db.prepare(baseQuery).all(period, fromTs, toTs);
+    const subscriptions = detectProviderSubscriptions().active;
+    const normalized = rawRows
+      .map((row) => classifyCostRecord({
+        id: row.id,
+        agentId: row.agent_id || 'unknown',
+        timestamp: sanitizeInteger(row.timestamp),
+        source: String(row.source || 'openclaw-router'),
+        cost: row.cost,
+        tokens: row.tokens,
+        model: row.model,
+        bucketKey: sanitizeInteger(row.bucket_key),
+      }, subscriptions))
+      .filter((row) => row.cost > 0 && row.bucketKey > 0);
 
-    const periodData = db.prepare(`
-      ${baseCte}
-      SELECT
-        bucket_key AS timestamp,
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS billedCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS anthropicCost,
-        COALESCE(SUM(cost), 0) AS totalCost,
-        COUNT(*) AS count
-      FROM deduped
-      GROUP BY bucket_key
-      ORDER BY bucket_key DESC
-      LIMIT ?
-    `).all(period, fromTs, toTs, limit);
-
-    const providerBreakdown = db.prepare(`
-      ${baseCte}
-      SELECT
-        provider,
-        COALESCE(SUM(cost), 0) AS cost,
-        COALESCE(SUM(tokens), 0) AS tokens,
-        COUNT(*) AS count,
-        MAX(is_anthropic) AS isAnthropic
-      FROM deduped
-      GROUP BY provider
-      ORDER BY cost DESC
-    `).all(period, fromTs, toTs);
-
-    const agentBreakdown = db.prepare(`
-      ${baseCte}
-      SELECT
-        agent_id AS agentId,
-        COALESCE(SUM(cost), 0) AS cost,
-        COALESCE(SUM(tokens), 0) AS tokens,
-        COUNT(*) AS count,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS anthropicCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS billedCost
-      FROM deduped
-      GROUP BY agent_id
-      ORDER BY billedCost DESC
-    `).all(period, fromTs, toTs);
-
-    const modelBreakdown = db.prepare(`
-      ${baseCte}
-      SELECT
-        model,
-        provider,
-        COALESCE(SUM(cost), 0) AS cost,
-        COALESCE(SUM(tokens), 0) AS tokens,
-        COUNT(*) AS count,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS anthropicCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS billedCost
-      FROM deduped
-      GROUP BY model, provider
-      ORDER BY cost DESC
-    `).all(period, fromTs, toTs);
-
-    const sourceBreakdown = db.prepare(`
-      ${baseCte}
-      SELECT
-        source,
-        COALESCE(SUM(cost), 0) AS cost,
-        COALESCE(SUM(tokens), 0) AS tokens,
-        COUNT(*) AS count,
-        COALESCE(SUM(CASE WHEN is_anthropic = 1 THEN cost ELSE 0 END), 0) AS anthropicCost,
-        COALESCE(SUM(CASE WHEN is_anthropic = 0 THEN cost ELSE 0 END), 0) AS billedCost
-      FROM deduped
-      GROUP BY source
-      ORDER BY cost DESC
-    `).all(period, fromTs, toTs);
-
-    const dedupSkipped = db.prepare(`
-      ${baseCte}
-      SELECT model, timestamp, cost
-      FROM normalized n
-      WHERE n.source = 'openai-usage-api'
-        AND EXISTS (
-          SELECT 1 FROM normalized r
-          WHERE r.source = 'openclaw-router'
-            AND r.model = n.model
-            AND r.bucket_key = n.bucket_key
-        )
-      ORDER BY timestamp DESC
-      LIMIT 10
-    `).all(period, fromTs, toTs);
-
-    const dedupSkippedCount = db.prepare(`
-      ${baseCte}
-      SELECT COUNT(*) AS count
-      FROM normalized n
-      WHERE n.source = 'openai-usage-api'
-        AND EXISTS (
-          SELECT 1 FROM normalized r
-          WHERE r.source = 'openclaw-router'
-            AND r.model = n.model
-            AND r.bucket_key = n.bucket_key
-        )
-    `).get(period, fromTs, toTs).count;
+    const { deduped, skipped: dedupSkipped } = dedupeCostRows(normalized);
+    const summary = buildSummary(deduped, { todayStart, weekStart, monthStart });
+    const periodData = buildPeriodData(deduped, limit);
+    const providerBreakdown = buildGroupedBreakdown(deduped, (row) => row.provider, (row) => ({
+      provider: row.provider,
+      providerKey: row.providerKey,
+      coverage: row.coverage,
+      isCovered: row.isCovered,
+      isAnthropic: row.isAnthropic,
+      subscriptionType: row.subscriptionType,
+    }));
+    const agentBreakdown = buildGroupedBreakdown(deduped, (row) => row.agentId, (row) => ({
+      agentId: row.agentId,
+    }));
+    const modelBreakdown = buildGroupedBreakdown(deduped, (row) => `${row.model}\n${row.provider}`, (row) => ({
+      model: row.model,
+      provider: row.provider,
+      providerKey: row.providerKey,
+      coverage: row.coverage,
+      isCovered: row.isCovered,
+    }));
+    const sourceBreakdown = buildGroupedBreakdown(deduped, (row) => row.source, (row) => ({
+      source: row.source,
+    }));
 
     res.json({
       summary: {
-        totalBilledCost: parseFloat(summary.totalBilledCost.toFixed(4)),
-        totalAnthropicCost: parseFloat(summary.totalAnthropicCost.toFixed(4)),
+        totalBilledCost: roundCost(summary.totalBilledCost),
+        totalCoveredCost: roundCost(summary.totalCoveredCost),
+        totalCoveredTokens: summary.totalCoveredTokens,
+        totalAnthropicCost: roundCost(summary.totalCoveredCost),
         totalAnthropicTokens: summary.totalAnthropicTokens,
-        todayBilledCost: parseFloat(summary.todayBilledCost.toFixed(4)),
-        weekBilledCost: parseFloat(summary.weekBilledCost.toFixed(4)),
-        monthBilledCost: parseFloat(summary.monthBilledCost.toFixed(4)),
-        todayAnthropicCost: parseFloat(summary.todayAnthropicCost.toFixed(4)),
-        weekAnthropicCost: parseFloat(summary.weekAnthropicCost.toFixed(4)),
-        monthAnthropicCost: parseFloat(summary.monthAnthropicCost.toFixed(4)),
-        todayTotalCost: parseFloat((summary.todayBilledCost + summary.todayAnthropicCost).toFixed(4)),
-        weekTotalCost: parseFloat((summary.weekBilledCost + summary.weekAnthropicCost).toFixed(4)),
-        monthTotalCost: parseFloat((summary.monthBilledCost + summary.monthAnthropicCost).toFixed(4)),
-        dedupSkipped: dedupSkippedCount,
+        todayBilledCost: roundCost(summary.todayBilledCost),
+        weekBilledCost: roundCost(summary.weekBilledCost),
+        monthBilledCost: roundCost(summary.monthBilledCost),
+        todayCoveredCost: roundCost(summary.todayCoveredCost),
+        weekCoveredCost: roundCost(summary.weekCoveredCost),
+        monthCoveredCost: roundCost(summary.monthCoveredCost),
+        todayAnthropicCost: roundCost(summary.todayCoveredCost),
+        weekAnthropicCost: roundCost(summary.weekCoveredCost),
+        monthAnthropicCost: roundCost(summary.monthCoveredCost),
+        todayTotalCost: roundCost(summary.todayBilledCost + summary.todayCoveredCost),
+        weekTotalCost: roundCost(summary.weekBilledCost + summary.weekCoveredCost),
+        monthTotalCost: roundCost(summary.monthBilledCost + summary.monthCoveredCost),
+        subscriptions,
+        dedupSkipped: dedupSkipped.length,
       },
       periodData,
       providerBreakdown,
@@ -234,8 +117,13 @@ router.get('/', (req, res) => {
       modelBreakdown,
       sourceBreakdown,
       deduplication: {
-        skipped: dedupSkippedCount,
-        details: dedupSkipped,
+        skipped: dedupSkipped.length,
+        details: dedupSkipped.slice(0, 10).map((row) => ({
+          model: row.model,
+          timestamp: row.timestamp,
+          cost: row.cost,
+          source: row.source,
+        })),
       },
     });
   } catch (err) {
@@ -258,6 +146,132 @@ function normalizePeriod(value) {
     return normalized;
   }
   return 'day';
+}
+
+function dedupeCostRows(rows) {
+  const routerKeys = new Set(
+    rows
+      .filter((row) => row.source === 'openclaw-router')
+      .map((row) => `${row.providerKey}|${row.model.toLowerCase()}|${row.bucketKey}`)
+  );
+
+  const deduped = [];
+  const skipped = [];
+
+  for (const row of rows) {
+    const isOpenAIUsage = row.source === 'openai-usage-api';
+    const duplicateKey = `${row.providerKey}|${row.model.toLowerCase()}|${row.bucketKey}`;
+    if (isOpenAIUsage && routerKeys.has(duplicateKey)) {
+      skipped.push(row);
+      continue;
+    }
+    deduped.push(row);
+  }
+
+  return { deduped, skipped };
+}
+
+function buildSummary(rows, windows) {
+  const summary = {
+    totalBilledCost: 0,
+    totalCoveredCost: 0,
+    totalCoveredTokens: 0,
+    totalAnthropicTokens: 0,
+    todayBilledCost: 0,
+    weekBilledCost: 0,
+    monthBilledCost: 0,
+    todayCoveredCost: 0,
+    weekCoveredCost: 0,
+    monthCoveredCost: 0,
+  };
+
+  for (const row of rows) {
+    addCoverage(summary, row, '');
+    if (row.timestamp >= windows.todayStart) addCoverage(summary, row, 'today');
+    if (row.timestamp >= windows.weekStart) addCoverage(summary, row, 'week');
+    if (row.timestamp >= windows.monthStart) addCoverage(summary, row, 'month');
+    if (row.isCovered) summary.totalCoveredTokens += row.tokens;
+    if (row.isAnthropic) summary.totalAnthropicTokens += row.tokens;
+  }
+
+  return summary;
+}
+
+function addCoverage(target, row, prefix) {
+  const name = prefix ? `${prefix}${row.isCovered ? 'CoveredCost' : 'BilledCost'}` : `total${row.isCovered ? 'CoveredCost' : 'BilledCost'}`;
+  target[name] += row.cost;
+}
+
+function buildPeriodData(rows, limit) {
+  const byBucket = new Map();
+  for (const row of rows) {
+    const current = byBucket.get(row.bucketKey) || emptyBreakdown({ timestamp: row.bucketKey });
+    addRowTotals(current, row);
+    byBucket.set(row.bucketKey, current);
+  }
+
+  return [...byBucket.values()]
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, limit)
+    .map(roundBreakdown);
+}
+
+function buildGroupedBreakdown(rows, getKey, initFromRow) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = getKey(row);
+    const current = groups.get(key) || emptyBreakdown(initFromRow(row));
+    addRowTotals(current, row);
+    if (row.isCovered) current.isCovered = true;
+    if (row.isAnthropic) current.isAnthropic = true;
+    groups.set(key, current);
+  }
+
+  return [...groups.values()]
+    .sort((a, b) => b.cost - a.cost)
+    .map(roundBreakdown);
+}
+
+function emptyBreakdown(base) {
+  return {
+    ...base,
+    cost: 0,
+    billedCost: 0,
+    coveredCost: 0,
+    anthropicCost: 0,
+    tokens: 0,
+    count: 0,
+    isCovered: false,
+    isAnthropic: false,
+  };
+}
+
+function addRowTotals(target, row) {
+  target.cost += row.cost;
+  target.totalCost = target.cost;
+  target.tokens += row.tokens;
+  target.count += 1;
+  if (row.isCovered) {
+    target.coveredCost += row.cost;
+    target.anthropicCost += row.cost;
+  } else {
+    target.billedCost += row.cost;
+  }
+}
+
+function roundBreakdown(item) {
+  return {
+    ...item,
+    cost: roundCost(item.cost),
+    totalCost: roundCost(item.totalCost ?? item.cost),
+    billedCost: roundCost(item.billedCost),
+    coveredCost: roundCost(item.coveredCost),
+    anthropicCost: roundCost(item.anthropicCost),
+  };
+}
+
+function roundCost(value) {
+  return parseFloat(sanitizeNumber(value).toFixed(4));
 }
 
 export default router;

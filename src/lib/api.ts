@@ -376,10 +376,15 @@ export async function createComment(taskId: string, text: string) {
 
 export type CostSummary = {
   totalBilledCost: number;
+  totalCoveredCost: number;
+  totalCoveredTokens: number;
   totalAnthropicCost: number;
   totalAnthropicTokens: number;
   todayBilledCost: number;
   weekBilledCost: number;
+  todayCoveredCost: number;
+  weekCoveredCost: number;
+  monthCoveredCost: number;
   todayAnthropicCost: number;
   weekAnthropicCost: number;
   monthAnthropicCost: number;
@@ -392,6 +397,7 @@ export type CostSummary = {
 export type PeriodData = {
   timestamp: number;
   billedCost: number;
+  coveredCost: number;
   anthropicCost: number;
   totalCost: number;
   count: number;
@@ -399,16 +405,23 @@ export type PeriodData = {
 
 export type ProviderBreakdown = {
   provider: string;
+  providerKey?: string;
   cost: number;
   tokens: number;
   count: number;
+  coverage?: 'covered' | 'billed';
+  isCovered?: boolean;
   isAnthropic: boolean;
+  coveredCost?: number;
+  billedCost?: number;
+  anthropicCost?: number;
 };
 
 export type AgentBreakdown = {
   agentId: string;
   cost: number;
   billedCost: number;
+  coveredCost?: number;
   anthropicCost: number;
   tokens: number;
   count: number;
@@ -417,17 +430,22 @@ export type AgentBreakdown = {
 export type ModelBreakdown = {
   model: string;
   provider: string;
+  providerKey?: string;
   cost: number;
   billedCost: number;
+  coveredCost?: number;
   anthropicCost: number;
   tokens: number;
   count: number;
+  coverage?: 'covered' | 'billed';
+  isCovered?: boolean;
 };
 
 export type SourceBreakdown = {
   source: string;
   cost: number;
   billedCost: number;
+  coveredCost?: number;
   anthropicCost: number;
   tokens: number;
   count: number;
@@ -439,7 +457,7 @@ export type DeduplicationInfo = {
 };
 
 export type CostData = {
-  summary: CostSummary & { dedupSkipped?: number };
+  summary: CostSummary & { dedupSkipped?: number; subscriptions?: Record<string, unknown> };
   periodData: PeriodData[];
   providerBreakdown: ProviderBreakdown[];
   agentBreakdown: AgentBreakdown[];
@@ -453,7 +471,95 @@ export async function getCosts(params?: { period?: 'hour' | 'day' | 'week' | 'mo
   if (params?.period) search.set('period', params.period);
   if (params?.limit) search.set('limit', String(params.limit));
   const query = search.toString();
-  return request<CostData>(`/costs${query ? `?${query}` : ''}`, {
+  const data = await request<CostData>(`/costs${query ? `?${query}` : ''}`, {
     headers: authHeaders(),
   });
+  return normalizeCostData(data);
+}
+
+function normalizeCostData(data: CostData): CostData {
+  const summary = data?.summary ?? ({} as CostSummary);
+  const coveredCost = finite(summary.totalCoveredCost ?? summary.totalAnthropicCost);
+  const todayCoveredCost = finite(summary.todayCoveredCost ?? summary.todayAnthropicCost);
+  const weekCoveredCost = finite(summary.weekCoveredCost ?? summary.weekAnthropicCost);
+  const monthCoveredCost = finite(summary.monthCoveredCost ?? summary.monthAnthropicCost);
+
+  return {
+    summary: {
+      ...summary,
+      totalBilledCost: finite(summary.totalBilledCost),
+      totalCoveredCost: coveredCost,
+      totalCoveredTokens: finite(summary.totalCoveredTokens ?? summary.totalAnthropicTokens),
+      totalAnthropicCost: coveredCost,
+      totalAnthropicTokens: finite(summary.totalAnthropicTokens),
+      todayBilledCost: finite(summary.todayBilledCost),
+      weekBilledCost: finite(summary.weekBilledCost),
+      monthBilledCost: finite(summary.monthBilledCost),
+      todayCoveredCost,
+      weekCoveredCost,
+      monthCoveredCost,
+      todayAnthropicCost: todayCoveredCost,
+      weekAnthropicCost: weekCoveredCost,
+      monthAnthropicCost: monthCoveredCost,
+      todayTotalCost: finite(summary.todayTotalCost ?? finite(summary.todayBilledCost) + todayCoveredCost),
+      weekTotalCost: finite(summary.weekTotalCost ?? finite(summary.weekBilledCost) + weekCoveredCost),
+      monthTotalCost: finite(summary.monthTotalCost ?? finite(summary.monthBilledCost) + monthCoveredCost),
+      dedupSkipped: finite(summary.dedupSkipped),
+    },
+    periodData: array(data?.periodData).map((item) => normalizeBreakdown(item) as PeriodData),
+    providerBreakdown: array(data?.providerBreakdown).map((item) => ({
+      ...normalizeBreakdown(item),
+      provider: text(item.provider, 'Unknown'),
+      providerKey: typeof item.providerKey === 'string' ? item.providerKey : undefined,
+      coverage: item.coverage === 'covered' ? 'covered' : 'billed',
+      isCovered: Boolean(item.isCovered ?? item.isAnthropic),
+      isAnthropic: Boolean(item.isAnthropic),
+    }) as ProviderBreakdown),
+    agentBreakdown: array(data?.agentBreakdown).map((item) => ({
+      ...normalizeBreakdown(item),
+      agentId: text(item.agentId, 'unknown'),
+    }) as AgentBreakdown),
+    modelBreakdown: array(data?.modelBreakdown).map((item) => ({
+      ...normalizeBreakdown(item),
+      model: text(item.model, 'unknown'),
+      provider: text(item.provider, 'Unknown'),
+      providerKey: typeof item.providerKey === 'string' ? item.providerKey : undefined,
+      coverage: item.coverage === 'covered' ? 'covered' : 'billed',
+      isCovered: Boolean(item.isCovered ?? item.anthropicCost),
+    }) as ModelBreakdown),
+    sourceBreakdown: array(data?.sourceBreakdown).map((item) => ({
+      ...normalizeBreakdown(item),
+      source: text(item.source, 'unknown'),
+    }) as SourceBreakdown),
+    deduplication: data?.deduplication,
+  };
+}
+
+function normalizeBreakdown<T extends Record<string, unknown>>(item: T) {
+  const coveredCost = finite(item.coveredCost ?? item.anthropicCost);
+  const cost = finite(item.cost ?? item.totalCost);
+  return {
+    ...item,
+    timestamp: finite(item.timestamp),
+    cost,
+    totalCost: finite(item.totalCost ?? cost),
+    billedCost: finite(item.billedCost),
+    coveredCost,
+    anthropicCost: coveredCost,
+    tokens: finite(item.tokens),
+    count: finite(item.count),
+  };
+}
+
+function array<T>(value: T[] | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function finite(value: unknown): number {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function text(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() ? value : fallback;
 }

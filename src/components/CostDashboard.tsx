@@ -19,7 +19,7 @@ export function CostDashboard({ agents }: Props) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [period, setPeriod] = React.useState<Period>('day');
-  const [showAnthropic, setShowAnthropic] = React.useState(true);
+  const [showCovered, setShowCovered] = React.useState(true);
   const [lastUpdated, setLastUpdated] = React.useState<number | null>(null);
 
   const loadCostData = React.useCallback(async () => {
@@ -47,12 +47,17 @@ export function CostDashboard({ agents }: Props) {
     }, {});
   }, [agents]);
 
+  const numberOrZero = (value: unknown) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  };
+
   const formatCost = (cost: number) => {
-    return `$${cost.toFixed(4)}`;
+    return `$${numberOrZero(cost).toFixed(4)}`;
   };
 
   const formatNumber = (value: number) => {
-    return value.toLocaleString('en-US');
+    return numberOrZero(value).toLocaleString('en-US');
   };
 
   const formatDate = (timestamp: number, period: Period) => {
@@ -95,6 +100,20 @@ export function CostDashboard({ agents }: Props) {
     );
   }
 
+  const summary = costData.summary;
+  const periodRows = Array.isArray(costData.periodData) ? costData.periodData : [];
+  const providerRows = Array.isArray(costData.providerBreakdown) ? costData.providerBreakdown : [];
+  const agentRows = Array.isArray(costData.agentBreakdown) ? costData.agentBreakdown : [];
+  const modelRows = Array.isArray(costData.modelBreakdown) ? costData.modelBreakdown : [];
+  const sourceRows = Array.isArray(costData.sourceBreakdown) ? costData.sourceBreakdown : [];
+  const coveredCost = (item: { coveredCost?: number; anthropicCost?: number }) => numberOrZero(item.coveredCost ?? item.anthropicCost);
+  const summaryCovered = (key: 'today' | 'week' | 'month' | 'total') => {
+    if (key === 'today') return numberOrZero(summary.todayCoveredCost ?? summary.todayAnthropicCost);
+    if (key === 'week') return numberOrZero(summary.weekCoveredCost ?? summary.weekAnthropicCost);
+    if (key === 'month') return numberOrZero(summary.monthCoveredCost ?? summary.monthAnthropicCost);
+    return numberOrZero(summary.totalCoveredCost ?? summary.totalAnthropicCost);
+  };
+
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
@@ -104,15 +123,15 @@ export function CostDashboard({ agents }: Props) {
             Today
           </p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold">{formatCost(costData.summary.todayTotalCost ?? (costData.summary.todayBilledCost + (costData.summary.todayAnthropicCost ?? 0)))}</span>
+            <span className="text-3xl font-bold">{formatCost(summary.todayTotalCost ?? (summary.todayBilledCost + summaryCovered('today')))}</span>
             <span className="text-xs text-muted-foreground">total</span>
           </div>
           <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-            {(costData.summary.todayAnthropicCost ?? 0) > 0 && (
-              <span className="text-emerald-400">{formatCost(costData.summary.todayAnthropicCost ?? 0)} included</span>
+            {summaryCovered('today') > 0 && (
+              <span className="text-emerald-400">{formatCost(summaryCovered('today'))} covered</span>
             )}
-            {costData.summary.todayBilledCost > 0 && (
-              <span>{formatCost(costData.summary.todayBilledCost)} billed</span>
+            {numberOrZero(summary.todayBilledCost) > 0 && (
+              <span>{formatCost(summary.todayBilledCost)} billed</span>
             )}
           </div>
         </Card>
@@ -122,15 +141,15 @@ export function CostDashboard({ agents }: Props) {
             This Week
           </p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold">{formatCost(costData.summary.weekTotalCost ?? (costData.summary.weekBilledCost + (costData.summary.weekAnthropicCost ?? 0)))}</span>
+            <span className="text-3xl font-bold">{formatCost(summary.weekTotalCost ?? (summary.weekBilledCost + summaryCovered('week')))}</span>
             <span className="text-xs text-muted-foreground">total</span>
           </div>
           <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-            {(costData.summary.weekAnthropicCost ?? 0) > 0 && (
-              <span className="text-emerald-400">{formatCost(costData.summary.weekAnthropicCost ?? 0)} included</span>
+            {summaryCovered('week') > 0 && (
+              <span className="text-emerald-400">{formatCost(summaryCovered('week'))} covered</span>
             )}
-            {costData.summary.weekBilledCost > 0 && (
-              <span>{formatCost(costData.summary.weekBilledCost)} billed</span>
+            {numberOrZero(summary.weekBilledCost) > 0 && (
+              <span>{formatCost(summary.weekBilledCost)} billed</span>
             )}
           </div>
         </Card>
@@ -140,53 +159,53 @@ export function CostDashboard({ agents }: Props) {
             This Month
           </p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold">{formatCost(costData.summary.monthTotalCost ?? (costData.summary.monthBilledCost + (costData.summary.monthAnthropicCost ?? 0)))}</span>
+            <span className="text-3xl font-bold">{formatCost(summary.monthTotalCost ?? (summary.monthBilledCost + summaryCovered('month')))}</span>
             <span className="text-xs text-muted-foreground">total</span>
           </div>
           <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-            {(costData.summary.monthAnthropicCost ?? 0) > 0 && (
-              <span className="text-emerald-400">{formatCost(costData.summary.monthAnthropicCost ?? 0)} included</span>
+            {summaryCovered('month') > 0 && (
+              <span className="text-emerald-400">{formatCost(summaryCovered('month'))} covered</span>
             )}
-            {costData.summary.monthBilledCost > 0 && (
-              <span>{formatCost(costData.summary.monthBilledCost)} billed</span>
+            {numberOrZero(summary.monthBilledCost) > 0 && (
+              <span>{formatCost(summary.monthBilledCost)} billed</span>
             )}
           </div>
         </Card>
       </div>
 
-      {/* Anthropic (Included in Max Plan) */}
+      {/* Subscription-covered usage */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-1">
-              Anthropic Claude
+              Subscription-Covered Usage
             </p>
             <p className="text-xs text-muted-foreground">
-              Included in $200/mo Max Plan (not billed per-request)
+              Costs covered by detected provider subscriptions, not paid per request
             </p>
           </div>
           <button
             type="button"
-            onClick={() => setShowAnthropic(!showAnthropic)}
+            onClick={() => setShowCovered(!showCovered)}
             className="text-xs text-primary hover:underline"
           >
-            {showAnthropic ? 'Hide' : 'Show'}
+            {showCovered ? 'Hide' : 'Show'}
           </button>
         </div>
-        {showAnthropic && (
+        {showCovered && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground mb-1">Total Usage (All Time)</p>
               <p className="text-xl font-semibold text-emerald-400">
-                {formatCost(costData.summary.totalAnthropicCost)}
+                {formatCost(summaryCovered('total'))}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {(costData.summary.totalAnthropicTokens / 1_000_000).toFixed(2)}M tokens
+                {(numberOrZero(summary.totalCoveredTokens ?? summary.totalAnthropicTokens) / 1_000_000).toFixed(2)}M tokens
               </p>
             </div>
             <div className="flex items-center">
               <Badge variant="outline" className="text-emerald-400 border-emerald-400/40">
-                Included in Plan
+                Covered
               </Badge>
             </div>
           </div>
@@ -227,7 +246,7 @@ export function CostDashboard({ agents }: Props) {
       </div>
 
       {/* Period Data Table */}
-      <CostBarChart periodData={costData.periodData} period={period} />
+      <CostBarChart periodData={periodRows} period={period} />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -241,7 +260,7 @@ export function CostDashboard({ agents }: Props) {
                   Billed Cost
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Anthropic (Included)
+                  Covered Cost
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Requests
@@ -249,23 +268,23 @@ export function CostDashboard({ agents }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
-              {costData.periodData.length === 0 ? (
+              {periodRows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-xs text-muted-foreground">
                     No data for this period
                   </td>
                 </tr>
               ) : (
-                costData.periodData.map((item, index) => (
+                periodRows.map((item, index) => (
                   <tr key={index} className="hover:bg-muted/30 transition">
                     <td className="px-4 py-3 font-medium">
                       {formatDate(item.timestamp, period)}
                     </td>
                     <td className="px-4 py-3 text-right font-mono">
-                      {formatCost(item.billedCost)}
+                      {formatCost(numberOrZero(item.billedCost))}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-emerald-400">
-                      {formatCost(item.anthropicCost)}
+                      {formatCost(coveredCost(item))}
                     </td>
                     <td className="px-4 py-3 text-right text-muted-foreground">
                       {item.count}
@@ -301,33 +320,33 @@ export function CostDashboard({ agents }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {costData.providerBreakdown.length === 0 ? (
+                {providerRows.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-xs text-muted-foreground">
                       No provider data
                     </td>
                   </tr>
                 ) : (
-                  costData.providerBreakdown.map((item, index) => (
+                  providerRows.map((item, index) => (
                     <tr key={index} className="hover:bg-muted/30 transition">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{item.provider}</span>
-                          {item.isAnthropic && (
+                          {(item.isCovered ?? item.isAnthropic) && (
                             <Badge variant="outline" className="text-emerald-400 border-emerald-400/40 text-[10px]">
-                              Included
+                              Covered
                             </Badge>
                           )}
                         </div>
                       </td>
                       <td className={cn(
                         "px-4 py-3 text-right font-mono",
-                        item.isAnthropic ? "text-emerald-400" : ""
+                        (item.isCovered ?? item.isAnthropic) ? "text-emerald-400" : ""
                       )}>
-                        {formatCost(item.cost)}
+                        {formatCost(numberOrZero(item.cost))}
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground">
-                        {(item.tokens / 1000).toFixed(1)}K
+                        {(numberOrZero(item.tokens) / 1000).toFixed(1)}K
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground">
                         {item.count}
@@ -342,7 +361,7 @@ export function CostDashboard({ agents }: Props) {
       </div>
 
       {/* Model Breakdown */}
-      {costData.modelBreakdown && costData.modelBreakdown.length > 0 && (
+      {modelRows.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold mb-4">Model Breakdown</h3>
           <Card className="overflow-hidden">
@@ -363,7 +382,7 @@ export function CostDashboard({ agents }: Props) {
                       Billed Cost
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Anthropic Cost
+                      Covered Cost
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Tokens
@@ -374,25 +393,25 @@ export function CostDashboard({ agents }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {costData.modelBreakdown.length === 0 ? (
+                  {modelRows.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-4 py-6 text-center text-xs text-muted-foreground">
                         No model data
                       </td>
                     </tr>
                   ) : (
-                    costData.modelBreakdown.map((item, index) => (
+                    modelRows.map((item, index) => (
                       <tr key={index} className="hover:bg-muted/30 transition">
                         <td className="px-4 py-3 font-medium">{item.model}</td>
                         <td className="px-4 py-3 text-muted-foreground">{item.provider}</td>
                         <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                          {formatCost(item.cost)}
+                          {formatCost(numberOrZero(item.cost))}
                         </td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {formatCost(item.billedCost)}
+                          {formatCost(numberOrZero(item.billedCost))}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-emerald-400">
-                          {formatCost(item.anthropicCost)}
+                          {formatCost(coveredCost(item))}
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">
                           {formatNumber(item.tokens)}
@@ -411,13 +430,13 @@ export function CostDashboard({ agents }: Props) {
       )}
 
       {/* Source Breakdown (if available) */}
-      {costData.sourceBreakdown && costData.sourceBreakdown.length > 0 && (
+      {sourceRows.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Cost Source Breakdown</h3>
-            {costData.summary.dedupSkipped !== undefined && costData.summary.dedupSkipped > 0 && (
+            {summary.dedupSkipped !== undefined && summary.dedupSkipped > 0 && (
               <Badge variant="outline" className="text-amber-400 border-amber-400/40">
-                {costData.summary.dedupSkipped} deduplicated
+                {summary.dedupSkipped} deduplicated
               </Badge>
             )}
           </div>
@@ -433,7 +452,7 @@ export function CostDashboard({ agents }: Props) {
                       Billed Cost
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Anthropic (Included)
+                      Covered Cost
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Requests
@@ -441,7 +460,7 @@ export function CostDashboard({ agents }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {costData.sourceBreakdown.map((item, index) => (
+                  {sourceRows.map((item, index) => (
                     <tr key={index} className="hover:bg-muted/30 transition">
                       <td className="px-4 py-3">
                         <span className="font-medium">
@@ -451,10 +470,10 @@ export function CostDashboard({ agents }: Props) {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-mono">
-                        {formatCost(item.billedCost)}
+                        {formatCost(numberOrZero(item.billedCost))}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-emerald-400">
-                        {formatCost(item.anthropicCost)}
+                        {formatCost(coveredCost(item))}
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground">
                         {item.count}
@@ -483,7 +502,7 @@ export function CostDashboard({ agents }: Props) {
                     Billed Cost
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Anthropic (Included)
+                    Covered Cost
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Total
@@ -494,14 +513,14 @@ export function CostDashboard({ agents }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {costData.agentBreakdown.length === 0 ? (
+                {agentRows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-6 text-center text-xs text-muted-foreground">
                       No agent data
                     </td>
                   </tr>
                 ) : (
-                  costData.agentBreakdown.map((item, index) => {
+                  agentRows.map((item, index) => {
                     const agent = agentById[item.agentId];
                     return (
                       <tr key={index} className="hover:bg-muted/30 transition">
@@ -509,13 +528,13 @@ export function CostDashboard({ agents }: Props) {
                           {agent?.name || item.agentId}
                         </td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {formatCost(item.billedCost)}
+                          {formatCost(numberOrZero(item.billedCost))}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-emerald-400">
-                          {formatCost(item.anthropicCost)}
+                          {formatCost(coveredCost(item))}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                          {formatCost(item.cost)}
+                          {formatCost(numberOrZero(item.cost))}
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">
                           {item.count}
@@ -537,17 +556,17 @@ export function CostDashboard({ agents }: Props) {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">
               Total Billed (All Time)
             </p>
-            <p className="text-3xl font-bold">{formatCost(costData.summary.totalBilledCost)}</p>
+            <p className="text-3xl font-bold">{formatCost(summary.totalBilledCost)}</p>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">
-              Anthropic Included (All Time)
+              Covered By Subscriptions (All Time)
             </p>
             <p className="text-3xl font-bold text-emerald-400">
-              {formatCost(costData.summary.totalAnthropicCost)}
+              {formatCost(summaryCovered('total'))}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {(costData.summary.totalAnthropicTokens / 1_000_000).toFixed(2)}M tokens
+              {(numberOrZero(summary.totalCoveredTokens ?? summary.totalAnthropicTokens) / 1_000_000).toFixed(2)}M tokens
             </p>
           </div>
         </div>

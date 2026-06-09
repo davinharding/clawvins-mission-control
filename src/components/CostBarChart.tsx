@@ -9,7 +9,12 @@ type Props = {
   period: Period;
 };
 
-const formatCost = (cost: number) => `$${cost.toFixed(4)}`;
+const numberOrZero = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const formatCost = (cost: number) => `$${numberOrZero(cost).toFixed(4)}`;
 
 const formatDate = (timestamp: number, period: Period) => {
   const date = new Date(timestamp);
@@ -28,12 +33,13 @@ const formatDate = (timestamp: number, period: Period) => {
 };
 
 export function CostBarChart({ periodData, period }: Props) {
+  const rows = Array.isArray(periodData) ? periodData : [];
   const maxTotal = React.useMemo(() => {
-    return periodData.reduce((max, item) => {
-      const total = item.billedCost + item.anthropicCost;
+    return rows.reduce((max, item) => {
+      const total = numberOrZero(item.billedCost) + numberOrZero(item.coveredCost ?? item.anthropicCost);
       return total > max ? total : max;
     }, 0);
-  }, [periodData]);
+  }, [rows]);
 
   return (
     <Card className="p-4 sm:p-5">
@@ -48,22 +54,24 @@ export function CostBarChart({ periodData, period }: Props) {
           </span>
           <span className="inline-flex items-center gap-1">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Anthropic
+            Covered
           </span>
         </div>
       </div>
-      {periodData.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="py-6 text-center text-xs text-muted-foreground">
           No data for this period
         </div>
       ) : (
         <div className="max-h-[540px] space-y-2 overflow-y-auto pr-1">
-          {periodData.map((item, index) => {
-            const total = item.billedCost + item.anthropicCost;
+          {rows.map((item, index) => {
+            const billedCost = numberOrZero(item.billedCost);
+            const coveredCost = numberOrZero(item.coveredCost ?? item.anthropicCost);
+            const total = billedCost + coveredCost;
             const barWidth = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
-            const billedWidth = total > 0 ? (item.billedCost / total) * 100 : 0;
-            const anthropicWidth = total > 0 ? (item.anthropicCost / total) * 100 : 0;
-            const title = `Total ${formatCost(total)} | Billed ${formatCost(item.billedCost)} | Anthropic ${formatCost(item.anthropicCost)}`;
+            const billedWidth = total > 0 ? (billedCost / total) * 100 : 0;
+            const coveredWidth = total > 0 ? (coveredCost / total) * 100 : 0;
+            const title = `Total ${formatCost(total)} | Billed ${formatCost(billedCost)} | Covered ${formatCost(coveredCost)}`;
 
             return (
               <div
@@ -86,7 +94,7 @@ export function CostBarChart({ periodData, period }: Props) {
                       />
                       <div
                         className="h-full bg-emerald-500"
-                        style={{ width: `${anthropicWidth}%` }}
+                        style={{ width: `${coveredWidth}%` }}
                       />
                     </div>
                   </div>

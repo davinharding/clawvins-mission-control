@@ -138,7 +138,7 @@ export function CostDashboard({ agents }: Props) {
 
         <Card className="p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            This Week
+            Last 7 Days
           </p>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold">{formatCost(summary.weekTotalCost ?? (summary.weekBilledCost + summaryCovered('week')))}</span>
@@ -156,7 +156,7 @@ export function CostDashboard({ agents }: Props) {
 
         <Card className="p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            This Month
+            Last 30 Days
           </p>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold">{formatCost(summary.monthTotalCost ?? (summary.monthBilledCost + summaryCovered('month')))}</span>

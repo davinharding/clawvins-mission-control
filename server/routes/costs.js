@@ -1,8 +1,43 @@
 import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
 import { db } from '../db.js';
 import { classifyCostRecord, detectProviderSubscriptions, sanitizeInteger, sanitizeNumber } from '../lib/cost-classification.js';
 
 const router = express.Router();
+
+const AGENTS_DIR = process.env.OPENCLAW_AGENTS_DIR || '/home/node/.openclaw/agents';
+const OPENAI_SUBSCRIPTION_TYPE = process.env.MC_OPENAI_SUBSCRIPTION_TYPE || 'pro-lite';
+const OPENAI_EQUIVALENT_PRICING = {
+  'gpt-5.5': {
+    inputPerMTok: numberFromEnv('MC_OPENAI_GPT_55_INPUT_PER_MTOK', 0.75),
+    outputPerMTok: numberFromEnv('MC_OPENAI_GPT_55_OUTPUT_PER_MTOK', 10),
+    cacheReadPerMTok: numberFromEnv('MC_OPENAI_GPT_55_CACHE_READ_PER_MTOK', 0),
+    cacheWritePerMTok: numberFromEnv('MC_OPENAI_GPT_55_CACHE_WRITE_PER_MTOK', 0),
+  },
+  default: {
+    inputPerMTok: numberFromEnv('MC_OPENAI_DEFAULT_INPUT_PER_MTOK', 0.75),
+    outputPerMTok: numberFromEnv('MC_OPENAI_DEFAULT_OUTPUT_PER_MTOK', 10),
+    cacheReadPerMTok: numberFromEnv('MC_OPENAI_DEFAULT_CACHE_READ_PER_MTOK', 0),
+    cacheWritePerMTok: numberFromEnv('MC_OPENAI_DEFAULT_CACHE_WRITE_PER_MTOK', 0),
+  },
+};
+
+const AGENT_MAP = {
+  coder: { id: 'agent-patch', name: 'Patch' },
+  clawvin: { id: 'agent-clawvin', name: 'Clawvin' },
+  main: { id: 'agent-clawvin', name: 'Clawvin' },
+  alpha: { id: 'agent-alpha', name: 'Alpha' },
+  qa: { id: 'agent-cypress', name: 'Cypress' },
+  nova: { id: 'agent-nova', name: 'Nova' },
+  'stagesnap-business': { id: 'agent-scout', name: 'Scout' },
+  training: { id: 'agent-atlas', name: 'Atlas' },
+  finance: { id: 'agent-ledger', name: 'Ledger' },
+  'health-tracking': { id: 'agent-vitals', name: 'Vitals' },
+  outreach: { id: 'agent-iris', name: 'Iris' },
+  iris: { id: 'agent-iris', name: 'Iris' },
+  content: { id: 'agent-content', name: 'Content' },
+};
 
 /**
  * Aggregate cost data by time period (hour/day/week/month)
@@ -50,7 +85,14 @@ router.get('/', (req, res) => {
     `;
 
     const rawRows = db.prepare(baseQuery).all(period, fromTs, toTs);
-    const subscriptions = detectProviderSubscriptions().active;
+    const subscriptions = {
+      ...detectProviderSubscriptions().active,
+      openai: detectProviderSubscriptions().active.openai || {
+        provider: 'openai',
+        type: OPENAI_SUBSCRIPTION_TYPE,
+        source: 'openclaw-session-usage',
+      },
+    };
     const normalized = rawRows
       .map((row) => classifyCostRecord({
         id: row.id,
@@ -63,8 +105,9 @@ router.get('/', (req, res) => {
         bucketKey: sanitizeInteger(row.bucket_key),
       }, subscriptions))
       .filter((row) => row.cost > 0 && row.bucketKey > 0);
+    const sessionUsageRows = loadOpenClawSessionUsageRows({ period, fromTs, toTs, subscriptions });
 
-    const { deduped, skipped: dedupSkipped } = dedupeCostRows(normalized);
+    const { deduped, skipped: dedupSkipped } = dedupeCostRows([...normalized, ...sessionUsageRows]);
     const summary = buildSummary(deduped, { todayStart, weekStart, monthStart });
     const periodData = buildPeriodData(deduped, limit);
     const providerBreakdown = buildGroupedBreakdown(deduped, (row) => row.provider, (row) => ({
@@ -146,6 +189,259 @@ function normalizePeriod(value) {
     return normalized;
   }
   return 'day';
+}
+
+function loadOpenClawSessionUsageRows({ period, fromTs, toTs, subscriptions }) {
+  const rows = [];
+  const seenSessionIds = new Set();
+
+  let agentDirs = [];
+  try {
+    agentDirs = fs.readdirSync(AGENTS_DIR);
+  } catch {
+    return rows;
+  }
+
+  for (const agentDir of agentDirs) {
+    const sessionsDir = path.join(AGENTS_DIR, agentDir, 'sessions');
+    if (!isDirectory(sessionsDir)) continue;
+
+    const agent = AGENT_MAP[agentDir] || { id: `agent-${agentDir}`, name: agentDir };
+    const sessionMeta = readSessionMeta(sessionsDir);
+
+    let files = [];
+    try {
+      files = fs.readdirSync(sessionsDir)
+        .filter((file) => file.endsWith('.jsonl') && !file.endsWith('.trajectory.jsonl'))
+        .map((file) => path.join(sessionsDir, file));
+    } catch {
+      continue;
+    }
+
+    for (const filePath of files) {
+      const sessionId = path.basename(filePath, '.jsonl');
+      const stat = safeStat(filePath);
+      if (stat && stat.mtimeMs < fromTs - 24 * 60 * 60 * 1000) continue;
+
+      const meta = sessionMeta.bySessionId.get(sessionId) || {};
+      const records = readSessionUsageRecords(filePath, {
+        agent,
+        agentDir,
+        sessionId,
+        sessionKey: meta.sessionKey || `${agentDir}:${sessionId}`,
+        period,
+        fromTs,
+        toTs,
+        subscriptions,
+      });
+
+      if (records.length > 0) {
+        seenSessionIds.add(sessionId);
+        rows.push(...records);
+      }
+    }
+
+    for (const [sessionKey, meta] of sessionMeta.bySessionKey.entries()) {
+      if (!meta.sessionId || seenSessionIds.has(meta.sessionId)) continue;
+      const record = buildAggregateSessionUsageRecord({
+        agent,
+        agentDir,
+        sessionKey,
+        meta,
+        period,
+        fromTs,
+        toTs,
+        subscriptions,
+      });
+      if (record) rows.push(record);
+    }
+  }
+
+  return rows;
+}
+
+function readSessionUsageRecords(filePath, context) {
+  const rows = [];
+  let raw = '';
+  try {
+    raw = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return rows;
+  }
+
+  const lines = raw.split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    if (entry.type !== 'message') continue;
+    const message = entry.message || {};
+    if (message.role !== 'assistant') continue;
+
+    const usage = normalizeUsage(message.usage);
+    if (!usage || usage.totalTokens <= 0) continue;
+
+    const timestamp = normalizeTimestamp(entry.timestamp || message.timestamp);
+    if (timestamp < context.fromTs || timestamp > context.toTs) continue;
+
+    const model = String(message.model || entry.model || 'unknown');
+    if (!isOpenAIModel(model, message.provider || entry.provider)) continue;
+
+    const cost = calculateOpenAIEquivalentCost(model, usage);
+    rows.push(classifyCostRecord({
+      id: `openclaw-session-${context.sessionId}-${entry.id || timestamp}`,
+      agentId: context.agent.id,
+      timestamp,
+      source: 'openclaw-session-usage',
+      cost,
+      tokens: usage.totalTokens,
+      model,
+      bucketKey: bucketKeyForTimestamp(timestamp, context.period),
+    }, context.subscriptions));
+  }
+
+  return rows;
+}
+
+function buildAggregateSessionUsageRecord({ agent, agentDir, sessionKey, meta, period, fromTs, toTs, subscriptions }) {
+  const timestamp = sanitizeInteger(meta.updatedAt || meta.lastInteractionAt || meta.sessionStartedAt);
+  if (timestamp < fromTs || timestamp > toTs) return null;
+
+  const usage = normalizeUsage({
+    input: meta.inputTokens,
+    output: meta.outputTokens,
+    cacheRead: meta.cacheRead,
+    cacheWrite: meta.cacheWrite,
+    totalTokens: meta.totalTokens,
+  });
+  if (!usage || usage.totalTokens <= 0) return null;
+
+  const model = String(meta.model || 'unknown');
+  if (!isOpenAIModel(model, meta.modelProvider || meta.provider)) return null;
+
+  const explicitCost = sanitizeNumber(meta.estimatedCostUsd);
+  const cost = explicitCost > 0 ? explicitCost : calculateOpenAIEquivalentCost(model, usage);
+  return classifyCostRecord({
+    id: `openclaw-session-aggregate-${agentDir}-${meta.sessionId || sessionKey}`,
+    agentId: agent.id,
+    timestamp,
+    source: 'openclaw-session-aggregate',
+    cost,
+    tokens: usage.totalTokens,
+    model,
+    bucketKey: bucketKeyForTimestamp(timestamp, period),
+  }, subscriptions);
+}
+
+function readSessionMeta(sessionsDir) {
+  const bySessionId = new Map();
+  const bySessionKey = new Map();
+  const filePath = path.join(sessionsDir, 'sessions.json');
+  let data = {};
+  try {
+    data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return { bySessionId, bySessionKey };
+  }
+
+  for (const [sessionKey, meta] of Object.entries(data)) {
+    const value = { ...meta, sessionKey };
+    bySessionKey.set(sessionKey, value);
+    if (meta?.sessionId) bySessionId.set(meta.sessionId, value);
+  }
+  return { bySessionId, bySessionKey };
+}
+
+function normalizeUsage(usage) {
+  if (!usage || typeof usage !== 'object') return null;
+  const input = sanitizeInteger(usage.input ?? usage.inputTokens ?? usage.prompt_tokens);
+  const output = sanitizeInteger(usage.output ?? usage.outputTokens ?? usage.completion_tokens);
+  const cacheRead = sanitizeInteger(usage.cacheRead ?? usage.cache_read ?? usage.cachedInputTokens);
+  const cacheWrite = sanitizeInteger(usage.cacheWrite ?? usage.cache_write);
+  const totalTokens = sanitizeInteger(usage.totalTokens ?? usage.total_tokens ?? input + output + cacheRead + cacheWrite);
+
+  return {
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    totalTokens: totalTokens || input + output + cacheRead + cacheWrite,
+  };
+}
+
+function calculateOpenAIEquivalentCost(model, usage) {
+  const pricing = getOpenAIPricing(model);
+  return (
+    usage.input * pricing.inputPerMTok +
+    usage.output * pricing.outputPerMTok +
+    usage.cacheRead * pricing.cacheReadPerMTok +
+    usage.cacheWrite * pricing.cacheWritePerMTok
+  ) / 1_000_000;
+}
+
+function getOpenAIPricing(model) {
+  const normalized = String(model || '').trim().toLowerCase();
+  if (normalized.includes('gpt-5.5')) return OPENAI_EQUIVALENT_PRICING['gpt-5.5'];
+  return OPENAI_EQUIVALENT_PRICING.default;
+}
+
+function isOpenAIModel(model, provider = '') {
+  const text = `${model || ''} ${provider || ''}`.toLowerCase();
+  return /\b(openai|codex|chatgpt|gpt-?[\w.]*)\b/.test(text);
+}
+
+function bucketKeyForTimestamp(timestamp, period) {
+  const date = new Date(timestamp);
+  if (period === 'hour') {
+    date.setMinutes(0, 0, 0);
+    return date.getTime();
+  }
+  if (period === 'week') {
+    const day = date.getDay();
+    const diff = (day + 6) % 7;
+    date.setDate(date.getDate() - diff);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  }
+  if (period === 'month') {
+    date.setDate(1);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  }
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function normalizeTimestamp(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function isDirectory(dirPath) {
+  try {
+    return fs.statSync(dirPath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function safeStat(filePath) {
+  try {
+    return fs.statSync(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function numberFromEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function dedupeCostRows(rows) {

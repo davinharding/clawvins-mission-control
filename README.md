@@ -127,6 +127,36 @@ bash keep-alive.sh
 
 Starts backend, Vite preview (port 3001), and the session watcher. Logs to `/tmp/mc-server.log`.
 
+### KB Ingestion Automation
+
+The KB source of truth stays outside this repo at `/home/node/.openclaw/workspace/kb`.
+Mission Control provides a cron-safe compiler that scans new markdown notes under
+`kb/raw`, appends bounded generated sections to relevant `kb/wiki` pages, and emits
+review-only Mission Control task drafts under `kb/compilations/task-drafts`.
+It does not publish Discord, email, social, or Mission Control tasks.
+
+```bash
+# Preview what would be compiled
+npm run kb:ingest -- --dry-run
+
+# Compile new/changed raw entries into wiki updates and draft task files
+npm run kb:ingest
+
+# Optional: point at a test KB root
+npm run kb:ingest -- --kb-root /tmp/kb --all
+```
+
+Cron example:
+
+```cron
+*/30 * * * * cd /home/node/.openclaw/code/mission-control && npm run kb:ingest >> /tmp/mission-control-kb-ingest.log 2>&1
+```
+
+The script uses `/home/node/.openclaw/workspace/kb/.kb-ingest.lock` to avoid overlapping
+runs and `/home/node/.openclaw/workspace/kb/.kb-ingest-state.json` to remember compiled
+raw entries. StageSnap-relevant notes are routed to product, distribution, and outreach
+clusters, with task drafts tagged `kb-draft` for manual review.
+
 ---
 
 ## API Overview

@@ -11,6 +11,7 @@
     "server": "/usr/local/bin/node server/index.js",
     "server:dev": "/usr/local/bin/node --watch server/index.js",
     "seed": "/usr/local/bin/node server/seed.js",
+    "kb:ingest": "/usr/local/bin/node scripts/ingest-kb.js",
     "fullstack": "npm run seed && concurrently \"npm run server:dev\" \"npm run dev\"",
     "test": "vitest run",
     "test:e2e": "playwright test",

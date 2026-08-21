@@ -4,38 +4,172 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <!-- PWA manifest -->
     <link rel="manifest" href="/mission_control/manifest.json" />
-
-    <!-- Standard -->
     <link rel="icon" type="image/svg+xml" href="/mission_control/favicon.svg" />
     <title>Mission Control</title>
 
-    <!-- Apple PWA meta tags — enables fullscreen on iPhone home screen -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Mission Control" />
     <link rel="apple-touch-icon" href="/mission_control/icons/apple-touch-icon.png" />
-
-    <!-- Theme color for browser chrome -->
     <meta name="theme-color" content="#6366f1" />
     <meta name="description" content="Harding Labs Mission Control — Task Board" />
 
-    <!-- Register service worker -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        // Unregister old service workers and clear caches
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          registrations.forEach(function(r) { r.unregister(); });
-        });
-        caches.keys().then(function(keys) {
-          keys.forEach(function(k) { caches.delete(k); });
-        });
+    <style>
+      #mc-bootstrap {
+        box-sizing: border-box;
+        min-height: 100vh;
+        padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #e2e8f0;
+        background: #0f172a;
+        font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
+      #mc-bootstrap-card { width: min(100%, 560px); padding: 24px; border: 1px solid #334155; border-radius: 14px; background: #111827; }
+      #mc-bootstrap h1 { margin: 0 0 8px; font-size: 20px; }
+      #mc-bootstrap p { margin: 0; color: #94a3b8; }
+      #mc-bootstrap-details { display: none; margin-top: 16px; padding: 12px; overflow: auto; white-space: pre-wrap; border-radius: 8px; background: #020617; color: #fca5a5; font: 12px/1.45 ui-monospace, monospace; }
+      #mc-bootstrap-actions { display: none; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+      #mc-bootstrap button { padding: 9px 14px; border: 1px solid #475569; border-radius: 8px; color: #fff; background: #4f46e5; font: inherit; font-weight: 600; }
+      #mc-bootstrap button + button { background: transparent; }
+    </style>
+    <script>
+      (function () {
+        var VERSION = 'mc-recovery-2026-08-21-v1';
+        var VERSION_KEY = 'mission-control:recovery-version';
+        var RELOAD_KEY = 'mission-control:recovery-reload';
+        var APP_PREFIX = '/mission_control/';
+
+        function relevantUrl(value) {
+          try { return new URL(value, location.href).pathname.indexOf(APP_PREFIX) === 0; }
+          catch (_) { return false; }
+        }
+
+        function relevantWorker(registration) {
+          var worker = registration.active || registration.waiting || registration.installing;
+          return relevantUrl(registration.scope) || Boolean(worker && relevantUrl(worker.scriptURL));
+        }
+
+        function relevantCacheName(name) {
+          return /mission[-_ ]?control/i.test(name);
+        }
+
+        async function evictMissionControlCaches() {
+          if (!('caches' in window)) return;
+          var names = await caches.keys();
+          await Promise.all(names.map(async function (name) {
+            if (relevantCacheName(name)) {
+              await caches.delete(name);
+              return;
+            }
+            var cache = await caches.open(name);
+            var requests = await cache.keys();
+            await Promise.all(requests.filter(function (request) {
+              return relevantUrl(request.url);
+            }).map(function (request) { return cache.delete(request); }));
+          }));
+        }
+
+        async function recover(force) {
+          var alreadyApplied = false;
+          try { alreadyApplied = localStorage.getItem(VERSION_KEY) === VERSION; } catch (_) {}
+          if (alreadyApplied && !force) return { changedController: false };
+
+          var controller = 'serviceWorker' in navigator ? navigator.serviceWorker.controller : null;
+          var controllerIsRelevant = Boolean(controller && relevantUrl(controller.scriptURL));
+          var removedController = false;
+
+          if ('serviceWorker' in navigator) {
+            var registrations = await navigator.serviceWorker.getRegistrations();
+            var removals = await Promise.all(registrations.filter(relevantWorker).map(async function (registration) {
+              var controlsPage = controllerIsRelevant && registration.active === controller;
+              var removed = await registration.unregister();
+              if (controlsPage && removed) removedController = true;
+              return removed;
+            }));
+            removedController = removedController || (controllerIsRelevant && removals.some(Boolean));
+          }
+
+          await evictMissionControlCaches();
+          try { localStorage.setItem(VERSION_KEY, VERSION); } catch (_) {}
+          return { changedController: removedController };
+        }
+
+        function controlledReload() {
+          try {
+            if (sessionStorage.getItem(RELOAD_KEY) === VERSION) return false;
+            sessionStorage.setItem(RELOAD_KEY, VERSION);
+          } catch (_) {}
+          location.reload();
+          return true;
+        }
+
+        function describe(value) {
+          if (!value) return 'Unknown browser error';
+          if (value.stack) return value.stack;
+          if (value.message) return value.message;
+          try { return JSON.stringify(value); } catch (_) { return String(value); }
+        }
+
+        function showFailure(title, detail) {
+          var root = document.getElementById('mc-bootstrap');
+          if (!root) return;
+          document.getElementById('mc-bootstrap-title').textContent = title;
+          document.getElementById('mc-bootstrap-message').textContent = 'Mission Control could not start. Retry normally, or remove stale app files without signing you out.';
+          var details = document.getElementById('mc-bootstrap-details');
+          details.textContent = detail + '\n\nURL: ' + location.href + '\nTime: ' + new Date().toISOString();
+          details.style.display = 'block';
+          document.getElementById('mc-bootstrap-actions').style.display = 'flex';
+        }
+
+        window.__MC_RECOVER__ = async function () {
+          try {
+            await recover(true);
+            location.reload();
+          } catch (error) {
+            showFailure('Recovery encountered an error', describe(error));
+          }
+        };
+        window.addEventListener('error', function (event) {
+          if (!window.__MC_REACT_MOUNTED__) showFailure('Mission Control failed to load', describe(event.error || event.message));
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          if (!window.__MC_REACT_MOUNTED__) showFailure('Mission Control failed to start', describe(event.reason));
+        });
+        window.setTimeout(function () {
+          if (!window.__MC_REACT_MOUNTED__) showFailure('Mission Control is taking too long to start', 'The application module did not mount within 12 seconds. This commonly indicates a stale or missing app asset.');
+        }, 12000);
+
+        window.__MC_BOOTSTRAP_RECOVERY__ = recover(false).then(function (result) {
+          result.reloadScheduled = result.changedController ? controlledReload() : false;
+          return result;
+        }).catch(function (error) {
+          showFailure('Startup recovery encountered an error', describe(error));
+          return { changedController: false };
+        });
+      })();
     </script>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="root">
+      <div id="mc-bootstrap" role="status" aria-live="polite">
+        <div id="mc-bootstrap-card">
+          <h1 id="mc-bootstrap-title">Starting Mission Control…</h1>
+          <p id="mc-bootstrap-message">Checking the application and removing stale app files if needed.</p>
+          <pre id="mc-bootstrap-details"></pre>
+          <div id="mc-bootstrap-actions">
+            <button type="button" onclick="location.reload()">Retry</button>
+            <button type="button" onclick="window.__MC_RECOVER__()">Recover app files</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module">
+      window.__MC_BOOTSTRAP_RECOVERY__.then((result) => {
+        if (!result.reloadScheduled) import('/src/main.tsx');
+      });
+    </script>
   </body>
 </html>

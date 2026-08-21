@@ -113,6 +113,19 @@
           try { return JSON.stringify(value); } catch (_) { return String(value); }
         }
 
+        function recordDiagnostic(kind, value) {
+          var report = {
+            kind: kind,
+            detail: describe(value),
+            url: location.href,
+            userAgent: navigator.userAgent,
+            timestamp: new Date().toISOString()
+          };
+          try { sessionStorage.setItem('mission-control:last-global-error', JSON.stringify(report)); } catch (_) {}
+          try { window.dispatchEvent(new CustomEvent('mission-control:error', { detail: report })); } catch (_) {}
+          return report.detail;
+        }
+
         function showFailure(title, detail) {
           var root = document.getElementById('mc-bootstrap');
           if (!root) return;
@@ -133,10 +146,14 @@
           }
         };
         window.addEventListener('error', function (event) {
-          if (!window.__MC_REACT_MOUNTED__) showFailure('Mission Control failed to load', describe(event.error || event.message));
+          var target = event.target;
+          var source = target && (target.src || target.href);
+          var detail = recordDiagnostic('error', event.error || event.message || (source && ('Failed to load ' + source)));
+          if (!window.__MC_REACT_MOUNTED__) showFailure('Mission Control failed to load', detail);
         });
         window.addEventListener('unhandledrejection', function (event) {
-          if (!window.__MC_REACT_MOUNTED__) showFailure('Mission Control failed to start', describe(event.reason));
+          var detail = recordDiagnostic('unhandledrejection', event.reason);
+          if (!window.__MC_REACT_MOUNTED__) showFailure('Mission Control failed to start', detail);
         });
         window.setTimeout(function () {
           if (!window.__MC_REACT_MOUNTED__) showFailure('Mission Control is taking too long to start', 'The application module did not mount within 12 seconds. This commonly indicates a stale or missing app asset.');

@@ -1,5 +1,6 @@
 import express from 'express';
 import { createComment, createEvent, getCommentsByTask, getTaskById } from '../db.js';
+import { findEquivalentConsecutiveNightlySyncComment } from '../lib/nightly-sync-comments.js';
 import { schemas, validateBody } from '../validation.js';
 
 const router = express.Router({ mergeParams: true });
@@ -33,6 +34,17 @@ router.post('/', validateBody(schemas.commentCreate), (req, res) => {
     const task = getTaskById(req.params.taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const existingComment = findEquivalentConsecutiveNightlySyncComment(
+      getCommentsByTask(req.params.taskId),
+      req.body.text,
+    );
+    if (existingComment) {
+      return res.status(200).json({
+        comment: formatComment(existingComment),
+        deduplicated: true,
+      });
     }
 
     // Attribution is enforced server-side — never trust req.body for author info

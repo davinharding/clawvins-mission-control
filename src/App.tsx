@@ -65,6 +65,7 @@ import { DashboardStats } from "@/components/DashboardStats";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { mergeEventsById } from "@/lib/events";
 
 type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -103,20 +104,6 @@ const upsertById = <T extends { id: string }>(items: T[], item: T, prepend = fal
   const next = [...items];
   next[index] = item;
   return next;
-};
-
-const mergeEvents = (items: EventItem[], incoming: EventItem[]) => {
-  const merged = new Map<string, EventItem>();
-  items.forEach((event) => merged.set(event.id, event));
-  incoming.forEach((event) => merged.set(event.id, event));
-  
-  // Always return new array (force React re-render)
-  const result = [];
-  for (const event of merged.values()) {
-    result.push(event);
-  }
-  result.sort((a, b) => b.timestamp - a.timestamp);
-  return result;
 };
 
 const EVENTS_PAGE_LIMIT = 50;
@@ -335,7 +322,7 @@ export default function HomePage() {
 
         setTasks(tasksResponse.tasks);
         setAgents(agentsResponse.agents);
-        setEvents(mergeEvents([], eventsResponse.events));
+        setEvents(mergeEventsById([], eventsResponse.events));
         setEventsHasMore(eventsResponse.events.length >= EVENTS_PAGE_LIMIT);
         setArchivedTasks(archivedResponse.tasks);
         setTaskStats(statsResponse);
@@ -396,7 +383,7 @@ export default function HomePage() {
         .then(([tasksResponse, agentsResponse, eventsResponse, archivedResponse, statsResponse]) => {
           setTasks(tasksResponse.tasks);
           setAgents(agentsResponse.agents);
-          setEvents(mergeEvents([], eventsResponse.events));
+          setEvents(mergeEventsById([], eventsResponse.events));
           setEventsHasMore(eventsResponse.events.length >= EVENTS_PAGE_LIMIT);
           setArchivedTasks(archivedResponse.tasks);
           setTaskStats(statsResponse);
@@ -477,7 +464,7 @@ export default function HomePage() {
 
     socket.on("event.new", (payload: EventPayload) => {
       setEvents((prev) => {
-        const updated = mergeEvents(prev, [payload.event]);
+        const updated = mergeEventsById(prev, [payload.event]);
         return updated;
       });
     });
@@ -693,7 +680,7 @@ export default function HomePage() {
       ]);
       setTasks(tasksResponse.tasks);
       setAgents(agentsResponse.agents);
-      setEvents(mergeEvents([], eventsResponse.events));
+      setEvents(mergeEventsById([], eventsResponse.events));
       setEventsHasMore(eventsResponse.events.length >= EVENTS_PAGE_LIMIT);
       setArchivedTasks(archivedResponse.tasks);
       setTaskStats(statsResponse);
@@ -1007,7 +994,7 @@ export default function HomePage() {
         limit: EVENTS_PAGE_LIMIT,
         before: oldestTimestamp,
       });
-      setEvents((prev) => mergeEvents(prev, eventsResponse.events));
+      setEvents((prev) => mergeEventsById(prev, eventsResponse.events));
       if (eventsResponse.events.length < EVENTS_PAGE_LIMIT) {
         setEventsHasMore(false);
       }

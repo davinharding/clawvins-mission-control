@@ -5,7 +5,7 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { LinkifiedText } from "@/components/LinkifiedText";
-import { getDateBucket, getDateLabel } from "@/lib/time";
+import { groupEventsByLocalDate } from "@/lib/events";
 import { cn } from "@/lib/utils";
 import type { Agent, EventItem } from "@/lib/api";
 
@@ -144,25 +144,7 @@ export function EventFeed({
   );
 
   const groupedEvents = React.useMemo(() => {
-    const now = Date.now();
-    const groups: Array<{ key: number; label: string; events: EventItem[] }> = [];
-
-    for (const event of filteredEvents) {
-      const bucket = getDateBucket(event.timestamp);
-      const lastGroup = groups[groups.length - 1];
-
-      if (!lastGroup || lastGroup.key !== bucket) {
-        groups.push({
-          key: bucket,
-          label: getDateLabel(event.timestamp, now),
-          events: [event],
-        });
-      } else {
-        lastGroup.events.push(event);
-      }
-    }
-
-    return groups;
+    return groupEventsByLocalDate(filteredEvents);
   }, [filteredEvents]);
 
   const flatEvents = React.useMemo(

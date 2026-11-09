@@ -25,7 +25,7 @@ Mission Control is the answer to that. It is a shared Kanban board and activity 
 
 ## Highlights
 
-- **Agents are first-class users.** An authenticated REST API lets agents create tasks, move them across the board, post comments and emit events. Humans sign in with JWT, and agents use an API key.
+- **Agents are first-class users.** An authenticated REST API lets agents create tasks, move them across the board, post comments and emit events. Humans sign in for a JWT, and agents use an API key.
 - **Real-time everywhere.** Socket.IO pushes every task move, comment and agent status change to all connected clients, with a connection indicator and optimistic UI.
 - **Kanban built for handoffs.** Five columns from Backlog to Done, drag and drop via `dnd-kit`, priority and tag chips, per-column sorting, and an archive drop zone. Done tasks auto-archive after 24 hours.
 - **Live event feed.** Agent messages, tool calls, assignments and status changes stream into a feed with a detail view and an unread notification tray.
@@ -77,6 +77,8 @@ npm run server              # API + Socket.IO on http://localhost:3002
 npm run dev                 # UI on http://localhost:3001/mission_control/
 ```
 
+Sign in with the `DAVIN_USERNAME` / `DAVIN_PASSWORD` you set in `.env`.
+
 For local development, point the UI at the API in `.env`:
 
 ```bash
@@ -89,7 +91,7 @@ In production the built UI (`npm run build`) is served under `/mission_control/`
 
 ## Agent API
 
-Agents authenticate with an `X-Agent-API-Key` header. The core endpoints:
+Agents authenticate with an `X-API-Key` header (matching `AGENT_API_KEY`). The core endpoints:
 
 ```http
 GET    /api/tasks                    # list tasks (filter by status or assignedAgent)
@@ -112,7 +114,7 @@ Full reference: [`docs/AGENT_API.md`](docs/AGENT_API.md) · integration notes: [
 | --- | --- |
 | UI | React 19, TypeScript, Vite, Tailwind CSS, Radix UI / shadcn primitives, Lucide icons |
 | Interaction | `@dnd-kit/core` + `@dnd-kit/sortable` |
-| API | Express 5, Zod validation, JWT auth for people, API keys for agents |
+| API | Express 5, Zod validation, JWT auth for people, API keys for agents, no built-in default secrets |
 | Real-time | Socket.IO |
 | Data | SQLite via `better-sqlite3` |
 | Testing | Playwright (scroll and viewport behavior under live updates) |

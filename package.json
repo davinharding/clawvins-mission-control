@@ -11,6 +11,7 @@
     "server": "node server/index.js",
     "server:dev": "node --watch server/index.js",
     "seed": "node server/seed.js",
+    "seed:demo": "node scripts/seed-demo.js",
     "fullstack": "npm run seed && concurrently \"npm run server:dev\" \"npm run dev\""
   },
   "dependencies": {

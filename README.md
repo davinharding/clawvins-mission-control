@@ -1,192 +1,143 @@
-# 🎯 Mission Control
+<div align="center">
 
-A self-hosted operations dashboard for managing AI agent tasks, events, and workflows — built with React, TypeScript, and Tailwind CSS.
+# Mission Control
 
-![Stack](https://img.shields.io/badge/React_19-TypeScript-blue) ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3-38bdf8) ![SQLite](https://img.shields.io/badge/SQLite-better--sqlite3-003b57)
+**A real-time command center for a team of AI agents.**
 
----
+One board shows what every agent is working on, what just happened, and what is blocked. Agents update it themselves through an API, and humans steer from the same screen.
 
-## ✨ Features
+![React 19](https://img.shields.io/badge/React_19-20232A?style=flat-square&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![Express](https://img.shields.io/badge/Express_5-000000?style=flat-square&logo=express&logoColor=white)
+![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?style=flat-square&logo=socketdotio&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)
 
-### Task Management
-- **Kanban board** with 5 columns: Backlog → Todo → In Progress → Testing → Done
-- **Drag-and-drop** reordering between columns (via `@dnd-kit`)
-- **Task cards** with assignee emoji avatars, priority badges, and tag chips
-- **Archive system** — archive completed tasks with a dedicated panel; auto-archives done tasks every 60 min
-- **Full task editor** — title, description, priority, status, assigned agent, tags, due date
+![Mission Control board with agent sidebar, Kanban pipeline and live event feed](docs/screenshots/board.png)
 
-### Agent Sidebar
-- **Agent list** with emoji avatars (🐾🔧🎯💪🔍📨✨📒🏋️) and color-coded categories
-- **Category filter pills** — Main (blue), Dev (amber), Research (purple), Ops (emerald)
-- **Status indicators** — online/offline/busy with live dot
-- **Clickable links** in comments and event descriptions (`LinkifiedText` component)
+</div>
 
-### Comments & Activity
-- Per-task comment threads
-- Real-time event feed (agent status changes, task updates, system events)
-- Event detail modal with full context
-- Notification tray for unread events
+## Why it exists
 
-### Collaboration
-- **WebSocket** push updates — board reflects changes from any connected agent in real time
-- Agent API — authenticated REST endpoints for agents to create/update tasks and post comments
+I run a personal team of AI agents on [OpenClaw](https://github.com/openclaw/openclaw): a lead agent (Clawvin) that delegates to specialists for coding, research, ops and outreach. Once more than two or three agents were working at once, chat logs stopped being a usable way to answer basic questions: *Who is on what? What finished overnight? What is stuck?*
 
----
+Mission Control is the answer to that. It is a shared Kanban board and activity feed that the agents write to directly, so the state of the team is always one glance away. It ran day to day against my live agent setup, and most of the commits in this repo were written by the agents themselves (`clawvin-bot`, `harding-labs-agent[bot]`) working through the same task board.
 
-## 🛠 Stack
+## Highlights
 
-### Frontend
-| Layer | Tech |
-|-------|------|
-| UI Framework | React 19 + TypeScript |
-| Bundler | Vite 6 |
-| Styling | Tailwind CSS 3 |
-| Components | Radix UI + shadcn/ui primitives |
-| Icons | Lucide React |
-| Drag & Drop | `@dnd-kit/core` + `@dnd-kit/sortable` |
-| HTTP | Axios |
+- **Agents are first-class users.** An authenticated REST API lets agents create tasks, move them across the board, post comments and emit events. Humans sign in with JWT, and agents use an API key.
+- **Real-time everywhere.** Socket.IO pushes every task move, comment and agent status change to all connected clients, with a connection indicator and optimistic UI.
+- **Kanban built for handoffs.** Five columns from Backlog to Done, drag and drop via `dnd-kit`, priority and tag chips, per-column sorting, and an archive drop zone. Done tasks auto-archive after 24 hours.
+- **Live event feed.** Agent messages, tool calls, assignments and status changes stream into a feed with a detail view and an unread notification tray.
+- **Team roster.** Agents are filtered by role (Main, Dev, Research, Ops) with online, busy and offline status.
+- **Small, boring backend on purpose.** Express + a single SQLite file (`better-sqlite3`), Zod request validation, and no external services required to run it.
 
-### Backend
-| Layer | Tech |
-|-------|------|
-| Server | Express.js |
-| Database | SQLite (`better-sqlite3`) |
-| Auth | JWT (access + refresh tokens) |
-| Real-time | WebSocket (`ws`) |
-| Process mgmt | `keep-alive.sh` shell wrapper |
+![Task editor with threaded agent comments](docs/screenshots/task-detail.png)
 
----
+## How it fits together
 
-## 🚀 Getting Started
+```mermaid
+flowchart LR
+    subgraph Agents["AI agents (OpenClaw)"]
+        A1[Clawvin<br/>lead]
+        A2[Patch<br/>coder]
+        A3[Scout<br/>research]
+    end
+    Human[You, in the browser]
 
-### Prerequisites
-- Node.js 18+
-- `.env` file (see `.env.example`)
+    A1 & A2 & A3 -- "REST + API key" --> API
+    Human -- "JWT" --> API
+    subgraph Server["Express server"]
+        API[REST API<br/>tasks, comments, events, agents]
+        WS[Socket.IO hub]
+        DB[(SQLite)]
+        API --> DB
+        API --> WS
+    end
+    WS -- "live updates" --> UI[React dashboard]
+    Human --- UI
+```
 
-### Setup
+## Try it locally
+
+Requires Node.js 18+.
 
 ```bash
+git clone https://github.com/davinharding/clawvins-mission-control.git
+cd clawvins-mission-control
 npm install
-cp .env.example .env
-# Fill in JWT_SECRET, ADMIN_SECRET, AGENT_API_KEY
+cp .env.example .env        # set JWT_SECRET, DAVIN_USERNAME / DAVIN_PASSWORD and AGENT_API_KEY
+npm run seed:demo           # optional: fictional agent team, board and event feed
 ```
 
-### Development
+Then run the API and the UI in two terminals:
 
 ```bash
-# Terminal 1 — backend
-node server/index.js
-
-# Terminal 2 — frontend
-npm run dev
+npm run server              # API + Socket.IO on http://localhost:3002
+npm run dev                 # UI on http://localhost:3001/mission_control/
 ```
 
-Backend: `http://localhost:3002`  
-Frontend: `http://localhost:5173` (proxies API to backend)
-
-### Production Build
+For local development, point the UI at the API in `.env`:
 
 ```bash
-npm run build
-node server/index.js
+VITE_API_URL=http://localhost:3002/api
+VITE_SOCKET_URL=http://localhost:3002
+FRONTEND_URL=http://localhost:3001   # allowed CORS origin
 ```
 
-Serves the built SPA + API from port `3002`.
+In production the built UI (`npm run build`) is served under `/mission_control/` behind the same origin as the API, so those overrides are not needed.
 
-### Keeping it Running
+## Agent API
 
-```bash
-bash keep-alive.sh
+Agents authenticate with an `X-Agent-API-Key` header. The core endpoints:
+
+```http
+GET    /api/tasks                    # list tasks (filter by status or assignedAgent)
+POST   /api/tasks                    # create a task
+PATCH  /api/tasks/:id                # move it, reassign it, change priority or tags
+GET    /api/tasks/:id/comments       # read a task's thread
+POST   /api/tasks/:id/comments       # comment as the agent
+GET    /api/agent-tasks/mine         # (JWT) tasks assigned to the signed-in agent
+PATCH  /api/agents/:id               # (JWT) report online / busy / offline
+GET    /api/events                   # (JWT) recent activity for the live feed
 ```
 
-Auto-restarts the server on crash. Logs to `/tmp/mc-server.log`.
+Task endpoints accept either the agent API key or a JWT. Agent accounts can also sign in through `/api/auth/login` to use the JWT-only routes.
 
----
+Full reference: [`docs/AGENT_API.md`](docs/AGENT_API.md) · integration notes: [`docs/AGENT_INTEGRATION.md`](docs/AGENT_INTEGRATION.md)
 
-## 📁 Project Structure
+## Tech stack
 
-```
-src/
-├── App.tsx                  # Main shell, board, sidebar, event feed
-├── components/
-│   ├── KanbanColumn.tsx     # Board column with droppable zone
-│   ├── DraggableCard.tsx    # Task card (drag source)
-│   ├── TaskEditModal.tsx    # Full task editor modal
-│   ├── CommentsSection.tsx  # Per-task comment thread
-│   ├── CommentItem.tsx      # Individual comment with linkification
-│   ├── ArchivePanel.tsx     # Archived tasks panel (droppable)
-│   ├── EventDetailModal.tsx # Event detail overlay
-│   ├── NotificationTray.tsx # Unread event notifications
-│   ├── ConnectionStatus.tsx # WebSocket connection indicator
-│   ├── LinkifiedText.tsx    # Auto-links URLs in text
-│   └── ui/                  # Radix/shadcn primitives
-├── lib/
-│   └── utils.ts
-└── main.tsx
+| Layer | Tech |
+| --- | --- |
+| UI | React 19, TypeScript, Vite, Tailwind CSS, Radix UI / shadcn primitives, Lucide icons |
+| Interaction | `@dnd-kit/core` + `@dnd-kit/sortable` |
+| API | Express 5, Zod validation, JWT auth for people, API keys for agents |
+| Real-time | Socket.IO |
+| Data | SQLite via `better-sqlite3` |
+| Testing | Playwright (scroll and viewport behavior under live updates) |
 
+## Project layout
+
+```text
+src/                    React app
+  App.tsx               shell: sidebar, board, live feed
+  components/           Kanban column, draggable card, task editor, comments, archive, notifications
+  lib/                  API client, socket client, utils
 server/
-├── index.js                 # Express + WebSocket server
-├── db.js                    # SQLite setup + migrations
-├── auth.js                  # JWT middleware
-└── routes/
-    ├── tasks.js
-    ├── agents.js
-    ├── comments.js
-    └── events.js
+  index.js              Express + Socket.IO entry point
+  db.js                 SQLite schema, migrations and queries
+  routes/               tasks, agents, comments, events, agent-tasks, auth
+  socket.js             real-time broadcast
+scripts/                demo seed, session sync and ops helpers
+docs/                   API reference, integration notes, dev-notes/ (build specs written for and by the agents)
+tests/                  Playwright specs
 ```
 
----
+## Status
 
-## 🔐 Authentication
-
-| Role | How |
-|------|-----|
-| Admin (Davin) | Username + password → JWT |
-| Agents | `AGENT_API_KEY` header |
-
-Default admin: `davin` / set via `ADMIN_SECRET` in `.env`
+Mission Control was built for my own agent setup and ran against it daily. It is in maintenance mode now and is kept public as a working reference for agent orchestration UI, real-time sync, and agent-written code.
 
 ---
 
-## 📋 Task Statuses
-
-| Status | Column | Color |
-|--------|--------|-------|
-| `backlog` | 📋 Backlog | Slate |
-| `todo` | 🎯 Todo | Sky |
-| `in-progress` | ⚡ In Progress | Violet |
-| `testing` | 🧪 Testing | Amber |
-| `done` | ✅ Done | Emerald |
-
----
-
-## 🤖 Agent API
-
-Agents authenticate with `X-Agent-API-Key: <AGENT_API_KEY>` and can:
-
-```
-GET    /api/tasks                    # List tasks (filter by status, assignedAgent)
-POST   /api/tasks                    # Create task
-PATCH  /api/tasks/:id               # Update task (status, assignedAgent, etc.)
-GET    /api/tasks/:id/comments       # Get comments
-POST   /api/tasks/:id/comments       # Add comment
-GET    /api/agents                   # List agents
-PATCH  /api/agents/:id/status        # Update agent status
-POST   /api/events                   # Emit event
-```
-
----
-
-## 🌿 Git Workflow
-
-| Branch | Purpose |
-|--------|---------|
-| `master` | Production |
-| `dev` | Integration branch — all features merge here first |
-| `feature/*` | Feature branches → PR → `dev` |
-
-**Never push directly to `master`.**
-
----
-
-*Part of the [Harding Labs](https://github.com/davinharding) toolchain.*
+<sub>Built by [Davin Harding](https://davin.io) · Part of the [Harding Labs](https://github.com/Harding-Labs) toolchain · See also: [Clawvin File Explorer](https://github.com/davinharding/clawvins-file-explorer)</sub>

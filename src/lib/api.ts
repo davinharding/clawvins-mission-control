@@ -70,11 +70,27 @@ export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, options);
   if (!res.ok) {
-    const message = await res.text();
-    throw new Error(message || `Request failed with ${res.status}`);
+    const body = await res.text();
+    let message = body || `Request failed with ${res.status}`;
+    try {
+      message = (JSON.parse(body) as { error?: string }).error ?? message;
+    } catch {
+      // body was not JSON; keep it as-is
+    }
+    throw new ApiError(message, res.status);
   }
   return res.json() as Promise<T>;
 }

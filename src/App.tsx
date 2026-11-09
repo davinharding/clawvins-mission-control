@@ -7,6 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
+import { LoginScreen } from "@/components/LoginScreen";
 import { cn } from "@/lib/utils";
 import type {
   Agent,
@@ -21,6 +22,8 @@ import {
   getEvents,
   getTasks,
   getArchivedTasks,
+  ApiError,
+  clearToken,
   getToken,
   login,
   setToken,
@@ -229,6 +232,8 @@ export default function HomePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [token, setTokenState] = React.useState<string | null>(getToken());
+  const [needsLogin, setNeedsLogin] = React.useState<boolean>(!getToken());
+  const [loginError, setLoginError] = React.useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = React.useState<string | null>(null);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [incomingComment, setIncomingComment] = React.useState<Comment | null>(null);
@@ -274,52 +279,54 @@ export default function HomePage() {
     activeTaskIdRef.current = activeTaskId;
   }, [activeTaskId]);
 
-  React.useEffect(() => {
-    let mounted = true;
+  const loadMissionData = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-    const bootstrap = async () => {
-      setLoading(true);
-      setError(null);
+    try {
+      const [tasksResponse, agentsResponse, eventsResponse, archivedResponse] = await Promise.all([
+        getTasks(),
+        getAgents(),
+        getEvents(),
+        getArchivedTasks(),
+      ]);
 
-      try {
-        let activeToken = getToken();
-        if (!activeToken) {
-          const username = import.meta.env.VITE_DAVIN_USERNAME || import.meta.env.VITE_ADMIN_USERNAME || "davin";
-          const password = import.meta.env.VITE_DAVIN_PASSWORD || import.meta.env.VITE_ADMIN_PASSWORD || "REDACTED_PASSWORD";
-          const response = await login(username, password);
-          setToken(response.token);
-          setTokenState(response.token);
-          activeToken = response.token;
-        } else {
-          setTokenState(activeToken);
-        }
-
-        const [tasksResponse, agentsResponse, eventsResponse, archivedResponse] = await Promise.all([
-          getTasks(),
-          getAgents(),
-          getEvents(),
-          getArchivedTasks(),
-        ]);
-
-        if (!mounted) return;
-
-        setTasks(tasksResponse.tasks);
-        setAgents(agentsResponse.agents);
-        setEvents(mergeEvents([], eventsResponse.events));
-        setArchivedTasks(archivedResponse.tasks);
-      } catch (err) {
-        if (!mounted) return;
-        setError(err instanceof Error ? err.message : "Failed to load mission data");
-      } finally {
-        if (mounted) setLoading(false);
+      setTasks(tasksResponse.tasks);
+      setAgents(agentsResponse.agents);
+      setEvents(mergeEvents([], eventsResponse.events));
+      setArchivedTasks(archivedResponse.tasks);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        // Stored token expired or was revoked: ask the user to sign in again.
+        clearToken();
+        setTokenState(null);
+        setNeedsLogin(true);
+        return;
       }
-    };
+      setError(err instanceof Error ? err.message : "Failed to load mission data");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    bootstrap();
+  React.useEffect(() => {
+    if (needsLogin) {
+      setLoading(false);
+      return;
+    }
+    loadMissionData();
+  }, [needsLogin, loadMissionData]);
 
-    return () => {
-      mounted = false;
-    };
+  const handleLogin = React.useCallback(async (username: string, password: string) => {
+    setLoginError(null);
+    try {
+      const response = await login(username, password);
+      setToken(response.token);
+      setTokenState(response.token);
+      setNeedsLogin(false);
+    } catch (err) {
+      setLoginError(err instanceof ApiError && err.status === 401 ? "Invalid username or password" : "Could not reach the server");
+    }
   }, []);
 
   React.useEffect(() => {
@@ -625,6 +632,10 @@ export default function HomePage() {
     () => tasks.find((task) => task.id === activeTaskId) ?? null,
     [tasks, activeTaskId]
   );
+
+  if (needsLogin) {
+    return <LoginScreen onSubmit={handleLogin} error={loginError} />;
+  }
 
   return (
     <div className="flex h-screen flex-col">

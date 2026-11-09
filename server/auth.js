@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { getAgentById } from './db.js';
+import { requireEnv, safeEqual } from './lib/secrets.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production-please';
+const JWT_SECRET = requireEnv('JWT_SECRET');
 const JWT_EXPIRY = '7d';
 
 function generateToken(user) {
@@ -43,10 +44,9 @@ function authMiddleware(req, res, next) {
 }
 
 function agentKeyMiddleware(req, res, next) {
-  // Read lazily so dotenv.config() has already run
-  const AGENT_API_KEY = process.env.AGENT_API_KEY || 'mc-agent-key-change-me';
+  // No key configured means agent-key auth is disabled (JWT still works).
   const key = req.headers['x-api-key'] || req.headers['x-agent-key'];
-  if (key === AGENT_API_KEY) {
+  if (safeEqual(key, process.env.AGENT_API_KEY)) {
     // Try to look up agent by id header for accurate name/role
     const agentId = req.headers['x-agent-id'] || 'agent-unknown';
     const agentName = req.headers['x-agent-name'] || 'Agent';

@@ -13,6 +13,7 @@ import agentTasksRoutes from './routes/agent-tasks.js';
 import { setupWebSocket } from './socket.js';
 import { SessionMonitor } from './session-monitor.js';
 import { createEvent, autoArchiveDoneTasks } from './db.js';
+import { safeEqual } from './lib/secrets.js';
 
 
 const app = express();
@@ -68,12 +69,15 @@ app.use('/api/agent-tasks', agentTasksRoutes);
 // Admin endpoint for session sync (called by watch-sessions.js)
 app.post('/api/admin/session-sync', express.json(), (req, res) => {
   try {
-    const adminSecret = process.env.ADMIN_SECRET || 'REDACTED_SECRET';
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret) {
+      return res.status(503).json({ error: 'Admin endpoint disabled (ADMIN_SECRET not set)' });
+    }
 
     // Accept secret in header or body (header preferred)
     const headerSecret = req.headers['x-admin-secret'];
     const bodySecret = req.body?.secret;
-    if (headerSecret !== adminSecret && bodySecret !== adminSecret) {
+    if (!safeEqual(headerSecret, adminSecret) && !safeEqual(bodySecret, adminSecret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 

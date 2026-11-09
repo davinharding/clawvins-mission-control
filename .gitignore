@@ -29,3 +29,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local data & test artifacts
+data/
+test-results/
+playwright-report/

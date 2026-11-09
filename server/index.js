@@ -1,7 +1,8 @@
+// Load .env before any other module reads process.env at import time.
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 import http from 'node:http';
 import { authMiddleware, agentKeyMiddleware } from './auth.js';
 import tasksRoutes from './routes/tasks.js';
@@ -13,7 +14,6 @@ import { setupWebSocket } from './socket.js';
 import { SessionMonitor } from './session-monitor.js';
 import { createEvent, autoArchiveDoneTasks } from './db.js';
 
-dotenv.config();
 
 const app = express();
 

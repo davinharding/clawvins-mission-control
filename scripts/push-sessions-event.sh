@@ -2,7 +2,7 @@
 # This script is called FROM a system event to push session updates
 # It doesn't spawn agents - it just formats and sends data
 
-ADMIN_SECRET="${ADMIN_SECRET:-REDACTED_SECRET}"
+: "${ADMIN_SECRET:?ADMIN_SECRET is not set}"
 BACKEND_URL="http://localhost:3002/api/admin/session-sync"
 
 # Get sessions from stdin (passed by cron systemEvent)

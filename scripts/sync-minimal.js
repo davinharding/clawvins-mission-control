@@ -6,7 +6,11 @@
  */
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3002/api/admin/session-sync';
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'REDACTED_SECRET';
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
+if (!ADMIN_SECRET) {
+  console.error('ADMIN_SECRET is not set');
+  process.exit(1);
+}
 
 // This will be called with sessions JSON as first arg
 const sessionsData = process.argv[2];

@@ -9,7 +9,11 @@ import fetch from 'node:fetch';
 
 const API_URL = process.env.API_URL || 'http://localhost:3002';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'patch';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'REDACTED';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) {
+  console.error('Set ADMIN_PASSWORD to run this script');
+  process.exit(1);
+}
 
 let authToken = null;
 

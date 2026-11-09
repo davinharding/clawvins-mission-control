@@ -108,7 +108,7 @@ test.describe('Mission Control Scrolling', () => {
     
     // Trigger backend to generate event via session sync
     try {
-      await page.evaluate(() => {
+      await page.evaluate((secret) => {
         return fetch('http://localhost:3002/api/admin/session-sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -119,10 +119,10 @@ test.describe('Mission Control Scrolling', () => {
               messages: [],
               agent: 'test'
             }],
-            secret: 'REDACTED_SECRET'
+            secret
           })
         });
-      });
+      }, process.env.ADMIN_SECRET ?? '');
       
       console.log('Session sync request sent');
       

@@ -18,7 +18,7 @@ Obtain a token:
 ```bash
 curl -X POST "$MISSION_CONTROL_URL/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"username":"patch","password":"REDACTED"}'
+  -d '{"username":"patch","password":"$ADMIN_PASSWORD"}'
 ```
 
 Use the returned token for all API calls:

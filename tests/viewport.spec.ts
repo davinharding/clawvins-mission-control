@@ -105,7 +105,7 @@ test('Events stream in real-time', async ({ page }) => {
   console.log(`Initial event count: ${initialCount}`);
   
   // Trigger a new event (simulate session activity)
-  await page.evaluate(() => {
+  await page.evaluate((secret) => {
     fetch('/api/admin/session-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,10 +116,10 @@ test('Events stream in real-time', async ({ page }) => {
           messages: [],
           agent: 'test'
         }],
-        secret: 'REDACTED_SECRET'
+        secret
       })
     });
-  });
+  }, process.env.ADMIN_SECRET ?? '');
   
   // Wait for new event to appear (max 10 seconds)
   try {

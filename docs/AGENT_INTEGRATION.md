@@ -348,7 +348,7 @@ This tests:
    # Get auth token
    curl -X POST http://localhost:3002/api/auth/login \
      -H "Content-Type: application/json" \
-     -d '{"username":"patch","password":"REDACTED"}'
+     -d '{"username":"patch","password":"$ADMIN_PASSWORD"}'
    
    # Get agent tasks
    curl http://localhost:3002/api/agent-tasks/mine \

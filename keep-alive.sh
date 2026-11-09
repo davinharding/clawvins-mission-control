@@ -14,9 +14,7 @@ is_running() {
 
 while true; do
     # Backend (3002)
-    if ! is_running "$PID_BACKEND" || ! curl -sf -m 5 -o /dev/null http://localhost:3002/api/auth/login \
-        -H "Content-Type: application/json" \
-        -d '{"username":"davin","password":"REDACTED_PASSWORD"}' 2>/dev/null; then
+    if ! is_running "$PID_BACKEND" || ! curl -sf -m 5 -o /dev/null http://localhost:3002/health 2>/dev/null; then
 
         # Kill old if pid exists
         [ -f "$PID_BACKEND" ] && kill "$(cat "$PID_BACKEND")" 2>/dev/null && sleep 1

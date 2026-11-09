@@ -12,7 +12,11 @@ import path from 'path';
 import http from 'http';
 
 const AGENTS_DIR = '/home/node/.openclaw/agents';
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'REDACTED_SECRET';
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
+if (!ADMIN_SECRET) {
+  console.error('ADMIN_SECRET is not set');
+  process.exit(1);
+}
 const POLL_INTERVAL = 5000; // 5 seconds
 const STATE_FILE = '/tmp/mc-watcher-state.json';
 

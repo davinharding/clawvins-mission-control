@@ -7,7 +7,7 @@ LOG="/tmp/mc-server.log"
 PIDFILE="/tmp/mc-server.pid"
 
 # Check if server is responding
-if curl -sf http://localhost:3002/api/auth/login -X POST -H "Content-Type: application/json" -d '{"username":"davin","password":"REDACTED_PASSWORD"}' > /dev/null 2>&1; then
+if curl -sf -m 5 http://localhost:3002/health > /dev/null 2>&1; then
     exit 0
 fi
 
